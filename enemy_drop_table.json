@@ -1,0 +1,128 @@
+{
+  "griffon": {
+    "common": ["griffon_feather", "raw_meat"],
+    "uncommon": ["hardened_talon", "wind_essence"],
+    "rare": ["griffon_heart", "sky_sigil"]
+  },
+
+  "chimera": {
+    "common": ["beast_hide", "mixed_bone_shards"],
+    "uncommon": ["elemental_gland_random", "chimera_fang"],
+    "rare": ["chimera_core", "mutagenic_relic"]
+  },
+
+  "goblin": {
+    "common": ["coins", "scrap_metal", "crude_weapon"],
+    "uncommon": ["lockpick_set", "goblin_totem"],
+    "rare": ["stolen_blueprint", "lucky_trinket"]
+  },
+
+  "bandit": {
+    "common": ["ammo", "coins", "food"],
+    "uncommon": ["weapon_attachment", "armor_piece"],
+    "rare": ["map_fragment", "skill_manual"]
+  },
+
+  "wolf": {
+    "common": ["raw_meat", "fur"],
+    "uncommon": ["sharp_fang", "tough_hide"],
+    "rare": ["alpha_fang", "beast_spirit_charm"]
+  },
+
+  "bear": {
+    "common": ["thick_hide", "raw_meat_large"],
+    "uncommon": ["reinforced_bone", "bear_fat"],
+    "rare": ["bear_totem", "primal_heart"]
+  },
+
+  "lich": {
+    "common": ["bone_dust", "dark_mana_residue"],
+    "uncommon": ["phylactery_shard", "necromantic_scroll"],
+    "rare": ["lich_phylactery", "forbidden_spell_tome"]
+  },
+
+  "mummy": {
+    "common": ["rotten_cloth", "sand_relic"],
+    "uncommon": ["curse_bandage", "ancient_coin"],
+    "rare": ["pharaoh_sigil", "curse_core"]
+  },
+
+  "harpy": {
+    "common": ["feather_bundle", "bone_shards"],
+    "uncommon": ["screech_gland", "wing_membrane"],
+    "rare": ["harpy_voice_crystal", "wind_rune"]
+  },
+
+  "wyvern": {
+    "common": ["wyvern_scale", "raw_meat"],
+    "uncommon": ["poison_gland", "wing_bone"],
+    "rare": ["wyvern_heart", "draconic_rune"]
+  },
+
+  "ogre": {
+    "common": ["heavy_scrap", "raw_meat"],
+    "uncommon": ["ogre_hide", "crushed_bone_plate"],
+    "rare": ["ogre_core", "strength_totem"]
+  },
+
+  "troll": {
+    "common": ["regenerative_flesh", "bone_shards"],
+    "uncommon": ["troll_blood", "thick_hide"],
+    "rare": ["regeneration_core", "troll_totem"]
+  },
+
+  "skeleton": {
+    "common": ["bone", "rusted_weapon"],
+    "uncommon": ["bone_powder", "old_coin"],
+    "rare": ["skeleton_captain_emblem", "undead_rune"]
+  },
+
+  "wight": {
+    "common": ["cold_essence", "bone_fragments"],
+    "uncommon": ["soul_fragment", "shadow_shard"],
+    "rare": ["wight_core", "death_sigil"]
+  },
+
+  "banshee": {
+    "common": ["ectoplasm", "wisp_essence"],
+    "uncommon": ["screaming_soul", "spirit_thread"],
+    "rare": ["banshee_heart", "fear_rune"]
+  },
+
+  "cultist": {
+    "common": ["coins", "cloth", "light_weapon"],
+    "uncommon": ["ritual_component", "cult_sigil"],
+    "rare": ["forbidden_tome_page", "dark_relic"]
+  },
+
+  "dark_knight": {
+    "common": ["heavy_armor_scrap", "dark_steel_shard"],
+    "uncommon": ["enchanted_armor_plate", "shadow_blade_core"],
+    "rare": ["dark_knight_crest", "cursed_weapon"]
+  },
+
+  "giant_spider": {
+    "common": ["spider_silk", "venom_gland"],
+    "uncommon": ["hardened_chitin", "toxic_extract"],
+    "rare": ["queen_silk", "poison_core"]
+  },
+
+  "slime": {
+    "common": ["slime_gel", "residue"],
+    "uncommon": ["elemental_slime_core", "alchemy_catalyst"],
+    "rare": ["pure_slime_core", "adaptive_rune"]
+  },
+
+  "corrupted_treant": {
+    "common": ["corrupted_wood", "sap"],
+    "uncommon": ["blight_seed", "living_bark"],
+    "rare": ["heartwood_core", "nature_relic"]
+  },
+
+  "elemental": {
+    "common": ["elemental_essence", "crystallized_residue"],
+    "uncommon": ["elemental_core_fragment", "charged_shard"],
+    "rare": ["greater_elemental_core", "primal_rune"]
+  }
+}
+

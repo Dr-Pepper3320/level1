@@ -1,0 +1,3359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Level 1 — Free Roam</title>
+<style>
+  :root{
+    --bg:#070a10;
+    --fg:#d7ffe3;
+    --muted:#9bd7b0;
+    --accent:#6df;
+    --danger:#ff6b6b;
+    --ok:#6bff95;
+    --panel:rgba(8,12,18,.78);
+    --panel2:rgba(8,12,18,.92);
+    --border:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:var(--bg);color:var(--fg);overflow:hidden;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+  canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;background:#000;display:block}
+
+  #hud{position:absolute;left:12px;top:12px;display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;z-index:5;pointer-events:none;}
+  .panel{pointer-events:auto;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px;backdrop-filter: blur(6px);box-shadow: 0 10px 30px rgba(0,0,0,.35);min-width: 220px;}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .title{font-weight:800;letter-spacing:.04em;font-size:13px;color:#eafff2;margin-bottom:6px}
+  .muted{color:var(--muted);font-size:12px}
+  .k{display:inline-block;padding:2px 6px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.06);font-size:12px}
+  button, select, textarea, input{pointer-events:auto;border:1px solid var(--border);background:rgba(255,255,255,.07);color:var(--fg);border-radius:10px;font-weight:700;user-select:none;font-family:inherit;}
+  button{padding:8px 10px;cursor:pointer;transition:transform .05s ease, background .15s ease;}
+  button:hover{background:rgba(255,255,255,.12)}
+  button:active{transform:translateY(1px)}
+  select, input{padding:8px 10px}
+  textarea{padding:10px 10px; font-weight:600}
+  .chip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.06);font-size:12px;}
+  .dot{width:8px;height:8px;border-radius:999px;background:var(--ok);box-shadow:0 0 12px rgba(107,255,149,.6)}
+  #toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--border);color:var(--fg);padding:10px 12px;border-radius:12px;z-index:10;display:none;max-width:min(760px, calc(100% - 24px));box-shadow: 0 10px 30px rgba(0,0,0,.45);}
+  #toast .t{font-weight:800;margin-bottom:4px}
+  #toast .b{color:var(--muted);font-size:12px;line-height:1.35}
+
+  /* ✅ Dialogue lower on screen */
+  #overlay, #cutsceneOverlay {
+    position:absolute;
+    inset:0;
+    z-index:20;
+    display:none;
+    align-items:flex-end;
+    justify-content:center;
+    background:rgba(0,0,0,.55);
+    padding:0 12px 70px;
+  }
+
+  #dialog{width:min(820px, calc(100% - 24px));background:var(--panel2);border:1px solid var(--border);border-radius:16px;box-shadow: 0 20px 60px rgba(0,0,0,.6);overflow:hidden;}
+  #dialog header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  #dialog header .who{font-weight:900;letter-spacing:.04em}
+  #dialog main{padding:12px 14px;max-height:min(52vh, 520px);overflow:auto}
+  #dialog .line{margin:10px 0}
+  #dialog .line .role{font-weight:900}
+  #dialog footer{padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  #say{flex:1;min-width:240px;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--fg);outline:none;font-weight:700}
+  #say::placeholder{color:rgba(215,255,227,.55)}
+  #mini{position:absolute;right:12px;top:12px;z-index:6;width:180px;height:180px;border-radius:14px;background:var(--panel);border:1px solid var(--border);overflow:hidden;backdrop-filter: blur(6px);box-shadow: 0 10px 30px rgba(0,0,0,.35);pointer-events:none;}
+  #mini canvas{position:absolute;inset:0;width:100%;height:100%}
+  #help{position:absolute;right:12px;bottom:12px;z-index:6;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:10px 12px;pointer-events:none;max-width:min(560px, calc(100% - 24px));}
+  #help .muted{line-height:1.35}
+
+  /* ============
+     Pause Menu (Skyrim-ish)
+     ============ */
+  #pauseOverlay{
+    position:fixed;inset:0;
+    display:none;
+    align-items:center;justify-content:center;
+    background:rgba(0,0,0,.55);
+    z-index:50;
+  }
+  #pauseShell{
+    width:min(1100px, 96vw);
+    height:min(720px, 92vh);
+    border:1px solid var(--border);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(8,12,18,.92), rgba(8,12,18,.78));
+    box-shadow:0 22px 90px rgba(0,0,0,.65);
+    backdrop-filter: blur(10px);
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  #pauseTop{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:14px 14px;border-bottom:1px solid var(--border);
+    background:rgba(255,255,255,.03);
+  }
+  #pauseTitle{font-weight:900;letter-spacing:.16em;font-size:14px;color:var(--muted);text-transform:uppercase}
+  #pauseMeta{font-size:12px;color:var(--fg);opacity:.9}
+  #pauseClose{padding:8px 10px;border-radius:12px}
+  #pauseBody{flex:1;display:grid;grid-template-columns:240px 1fr;min-height:0}
+  #pauseNav{
+    border-right:1px solid var(--border);
+    padding:12px;
+    background:rgba(255,255,255,.02);
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .pNavBtn{
+    width:100%;
+    text-align:left;
+    padding:10px 10px;
+    border-radius:12px;
+    border:1px solid var(--border);
+    background:rgba(255,255,255,.05);
+    font-weight:800;
+    cursor:pointer;
+  }
+  .pNavBtn:hover{background:rgba(255,255,255,.09)}
+  .pNavBtn.active{
+    background:rgba(109,255,149,.12);
+    border-color:rgba(109,255,149,.28);
+  }
+  .pNavHint{font-size:12px;color:var(--muted);opacity:.9;margin-top:8px;line-height:1.35}
+  .pSpacer{flex:1}
+  #pausePane{padding:14px;overflow:auto;min-height:0}
+  .pH1{font-size:16px;font-weight:900;letter-spacing:.08em;margin-bottom:10px}
+  .pCard{
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:rgba(255,255,255,.04);
+    padding:12px;
+    margin-bottom:12px;
+  }
+  .pGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width: 880px){
+    #pauseBody{grid-template-columns:1fr}
+    #pauseNav{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--border)}
+    .pNavBtn{width:auto}
+  }
+  #pauseMapWrap{display:flex;flex-direction:column;gap:10px}
+  #pauseMap{
+    width:100%;
+    aspect-ratio:16/9;
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:rgba(0,0,0,.25);
+  }
+  .pList{margin:0;padding-left:18px}
+  .pList li{margin:6px 0}
+  .pRow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .pTag{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.03)}
+
+
+  /* Hide intrusive debug panels */
+  #hud{display:none !important;}
+  #help{display:none !important;}
+
+
+  /* ============
+     Boot / Loading Overlay
+     ============ */
+  #bootOverlay{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(180deg, rgba(0,0,0,.72), rgba(0,0,0,.86));
+    z-index:9999;
+  }
+  #bootOverlay.hidden{opacity:0; pointer-events:none; transition:opacity .22s ease;}
+  #bootOverlay .bootBox{
+    width:min(520px, 92vw);
+    border:1px solid var(--border);
+    border-radius:18px;
+    background:var(--panel2);
+    box-shadow:0 22px 90px rgba(0,0,0,.65);
+    padding:16px 16px;
+    backdrop-filter: blur(10px);
+  }
+  #bootOverlay .bootTitle{
+    font-weight:900; letter-spacing:.18em;
+    color:var(--muted);
+    font-size:12px;
+    text-transform:uppercase;
+  }
+  #bootOverlay .bootStatus{
+    margin-top:8px;
+    font-weight:900;
+    font-size:14px;
+    color:var(--fg);
+  }
+  #bootOverlay .bootTiny{
+    margin-top:6px;
+    color:rgba(255,255,255,.72);
+    font-size:12px;
+    line-height:1.35;
+  }
+  #bootOverlay .bootBar{
+    margin-top:12px;
+    height:10px;
+    border-radius:999px;
+    overflow:hidden;
+    border:1px solid var(--border);
+    background:rgba(255,255,255,.08);
+  }
+  #bootOverlay .bootFill{
+    height:100%;
+    width:12%;
+    background:rgba(109,255,149,.22);
+    border-right:1px solid rgba(109,255,149,.35);
+    transition:width .22s ease;
+  }
+
+</style>
+</head>
+<body>
+
+<div id="bootOverlay" aria-label="Loading" role="status">
+  <div class="bootBox">
+    <div class="bootTitle">Nephilim</div>
+    <div id="bootStatus" class="bootStatus">Initializing…</div>
+    <div id="bootTiny" class="bootTiny">Loading Level 1 resources.</div>
+    <div class="bootBar"><div id="bootFill" class="bootFill"></div></div>
+    <div class="bootTiny" style="margin-top:10px">
+      Tip: once you’re in, press <span class="k">Esc</span> for the pause menu.
+    </div>
+  </div>
+</div>
+
+
+<canvas id="game" width="1280" height="720"></canvas>
+
+
+<div id="pauseOverlay" role="dialog" aria-modal="true" aria-label="Pause Menu">
+  <div id="pauseShell">
+    <div id="pauseTop">
+      <div>
+        <div id="pauseTitle">PAUSED</div>
+        <div id="pauseMeta">
+          <span id="pmChar">Adventurer</span> •
+          Level <b id="pmLevel">1</b> •
+          XP <b id="pmXP">0</b> •
+          SP <b id="pmSP">0</b>
+        </div>
+      </div>
+      <button id="pauseClose" title="Close (Esc)">Back</button>
+    </div>
+
+    <div id="pauseBody">
+      <div id="pauseNav" aria-label="Pause tabs">
+        <button class="pNavBtn" data-tab="stats">Stats</button>
+        <button class="pNavBtn" data-tab="quests">Quests</button>
+        <button class="pNavBtn" data-tab="map">Map</button>
+        <button class="pNavBtn" data-tab="lore">Lore</button>
+        <button class="pNavBtn" data-tab="settings">Settings</button>
+      </div>
+      <div id="pausePane"></div>
+    </div>
+  </div>
+</div>
+
+
+<div id="hud">
+  <div class="panel">
+    <div class="title">LEVEL 1 — FREE ROAM</div>
+    <div class="row" style="margin-bottom:8px">
+      <span class="chip"><span class="dot"></span><span id="status">Loading map…</span></span>
+      <button id="btnReset" title="Reset position & save">Reset</button>
+    </div>
+
+    <div class="muted" id="info">
+      WASD/Arrows move • Shift sprint •
+      <span class="k">LMB</span> sword •
+      <span class="k">G</span> fireball •
+      <span class="k">Space</span> shockwave •
+      E interact/pickup • M minimap • ` debug • <span class="k">K</span> kill-near (test) • <span class="k">I</span> inventory • <span class="k">J</span> journal
+    </div>
+
+    <div class="muted" style="margin-top:8px">
+      Pos: <span id="pos">—</span> • Zone: <span id="zone">—</span><br/>
+      <span class="muted">HP: <span id="hp">100</span></span><br/>
+      <!-- ✅ Progression HUD -->
+      <span class="muted">LVL: <span id="plvl">1</span> • XP: <span id="pxp">0</span>/<span id="pxpN">10</span></span>
+      <!-- ✅ Main Story Quest Tracker -->
+      <div id="questPanel" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div style="font-weight:800;letter-spacing:.08em;font-size:12px;color:#d7ffe3">ACTIVE QUEST</div>
+        <div id="qTitle" style="margin-top:6px;font-weight:800;color:#bfffe0">—</div>
+        <ul id="qObjectives" style="margin:8px 0 0 16px;padding:0"></ul>
+        <div class="muted" style="margin-top:8px">Press <span class="k">J</span> for Journal</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="mini" style="display:none"><canvas id="miniC" width="180" height="180"></canvas></div>
+
+<div id="toast">
+  <div class="t" id="toastT">Interaction</div>
+  <div class="b" id="toastB">Press <span class="k">E</span> to interact.</div>
+</div>
+
+<div id="overlay">
+  <div id="dialog">
+    <header>
+      <div class="who" id="dlgWho">Dialogue</div>
+      <div class="row"><button id="dlgClose">Close (Esc)</button></div>
+    </header>
+    <main id="dlgLog"></main>
+    <footer>
+      <input id="say" type="text" placeholder="Type and press Enter…" />
+      <button id="dlgSend">Send</button>
+    </footer>
+  </div>
+</div><div id="cutsceneOverlay" style="display:none;">
+  <div id="cutscene">
+    <header>
+      <div class="who" id="csTitle">Cutscene</div>
+      <div class="sub" id="csSub">—</div>
+    </header>
+    <main>
+      <div id="csBody" style="white-space:pre-wrap; line-height:1.35;"></div>
+    </main>
+    <footer>
+      <button id="csNext" class="btn">Continue</button>
+      <button id="csSkip" class="btn ghost">Skip</button>
+    </footer>
+  </div>
+</div>
+
+<div id="help">
+  <div class="title">Drop-in Notes</div>
+  <div class="muted">
+    Put <span class="k">level1_clean.html</span>, <span class="k">level1.png</span>, <span class="k">level1.points.json</span>,
+    <span class="k">enemy_drops.js</span>, <span class="k">enemies.js</span>, <span class="k">combat.js</span>,
+    <span class="k">dialogue_naamriel.js</span>, <span class="k">dialogue_runner.js</span>, and <span class="k">points_loader.js</span>
+    in the same folder.<br/>
+    Enemy AI + Dialogue + Points + Combat are external JS.
+    <br/>
+    <!-- ✅ NEW -->
+    Add <span class="k">progression.js</span> if you want it external (this HTML also includes a fallback inline version).
+  </div>
+</div>
+<!-- ✅ Progression + skill trees -->
+<!-- ✅ Dialogue data -->
+<!-- ✅ Dialogue runner (v2 supports multiple NPCs + dialogue actions) -->
+<script src="level1.points.js"></script>
+<script src="points_loader.js"></script>
+<script src="systems_merged.js"></script>
+<script src="enemies_merged.js"></script>
+<script src="dialogue_merged_slot_enabled.js"></script>
+<script src="main_story_quests_slot_enabled.js"></script>
+
+
+
+<script>
+/* Duel return bridge (v4)
+   Goal: DO NOT let spawn logic overwrite the duel return position.
+   - start_troll_duel stores localStorage "np_duel_return_state_v1" with player {x,y,faceX,faceY}
+   - On page load we STAGE that position to window.__DUEL_RETURN_OVERRIDE__ (but we don't apply yet)
+   - applySpawnPriority() (later, after points load) will apply & consume it
+   - We still immediately apply encounter_cleared payload (quest advancement)
+*/
+(function(){
+  function safeParse(raw){ try{ return raw ? JSON.parse(raw) : null; }catch(_){ return null; } }
+
+  // Stage override for spawn priority (do not consume here)
+  try{
+    const pack = safeParse(localStorage.getItem("np_duel_return_state_v1"));
+    if(pack && pack.type === "duel_return_state" && pack.player){
+      window.__DUEL_RETURN_OVERRIDE__ = pack.player;
+    }
+  }catch(e){
+    console.warn("Duel bridge staging failed:", e);
+  }
+
+  // Apply quest/encounter payload immediately
+  try{
+    const payload = safeParse(localStorage.getItem("np_return_payload_v1"));
+    if(payload && payload.type === "encounter_cleared"){
+      const msq = window.MainStoryQuestSystem;
+      if(msq && typeof msq.clearEncounter === "function" && payload.encounterId){
+        msq.clearEncounter(payload.encounterId);
+      }
+      localStorage.removeItem("np_return_payload_v1");
+    }
+  }catch(e){
+    console.warn("Duel bridge payload failed:", e);
+  }
+})();
+</script>
+
+
+
+
+<script>
+(() => {
+  // ============
+  // BootOverlay helper
+  // ============
+  const BootOverlay = (() => {
+    const el = document.getElementById("bootOverlay");
+    const st = document.getElementById("bootStatus");
+    const tiny = document.getElementById("bootTiny");
+    const fill = document.getElementById("bootFill");
+    let hidden = false;
+
+    function set(text, pct, sub){
+      if(!el || hidden) return;
+      if(st && typeof text === "string") st.textContent = text;
+      if(tiny && typeof sub === "string") tiny.textContent = sub;
+      if(fill && typeof pct === "number"){
+        const p = Math.max(0.02, Math.min(1, pct));
+        fill.style.width = (p * 100).toFixed(1) + "%";
+      }
+    }
+
+    function show(text, pct, sub){
+      if(!el) return;
+      hidden = false;
+      el.style.display = "flex";
+      el.classList.remove("hidden");
+      set(text ?? "Initializing…", pct ?? 0.12, sub ?? "Loading Level 1 resources.");
+    }
+
+    function hide(){
+      if(!el || hidden) return;
+      hidden = true;
+      set("Ready.", 1, "Entering the world…");
+      el.classList.add("hidden");
+      // remove from flow after fade
+      setTimeout(() => {
+        if(el) el.style.display = "none";
+      }, 260);
+    }
+
+    function error(text, sub){
+      if(!el) return;
+      hidden = false;
+      el.style.display = "flex";
+      el.classList.remove("hidden");
+      if(st) st.textContent = text || "Load failed.";
+      if(tiny) tiny.textContent = sub || "Check the console for details.";
+      if(fill) fill.style.width = "100%";
+    }
+
+    return { show, set, hide, error };
+  })();
+
+  // show immediately (covers init work done before mapImg.onload)
+  BootOverlay.show("Initializing…", 0.10, "Setting up systems…");
+
+  // ============
+  // SAFETY (show crash in HUD instead of silent black screen)
+  // ============
+  const CLONE = (obj) => {
+    try { if (typeof structuredClone === "function") return structuredClone(obj); } catch(_) {}
+    return JSON.parse(JSON.stringify(obj));
+  };
+  window.addEventListener("error", (ev) => {
+    try{
+      const msg = ev?.message || "Unknown error";
+      const where = (ev?.filename ? ev.filename.split("/").pop() : "") + (ev?.lineno ? `:${ev.lineno}` : "");
+      const s = document.getElementById("status");
+      if(s) s.textContent = "CRASH: " + msg + (where ? " ("+where+")" : "");
+    }catch(_){}
+  });
+
+  // ============
+  // CONFIG
+  // ============
+  const CFG = {
+    mapImage: "level1.png",
+    worldScale: 1,
+    player: { radius: 10, baseSpeed: 150, sprintMult: 1.55, accel: 18, friction: 12 },
+    camera: { deadzone: 0.08, lerp: 10, zoom: 1.0, maxShake: 2.2 },
+    saveKey: "level1_save_v1",
+    invKey:  "level1_inv_v1",
+    devKey: "level1_dev_v1",
+    pointsUrl: "level1.points.json",
+    pointsPreferFile: true,
+    dropsUrl: "enemy_drop_table.json",
+    dropsPreferFile: true,
+    maxDpr: 1.0,
+    enableVignette: true,
+
+    // ✅ progression save key
+    progKey: "level1_prog_v1",
+  };
+
+  // ============
+  // ✅ Save Slots (v1)
+  // The launcher sets localStorage "np_active_save_slot" to slot1/slot2/slot3.
+  // We namespace ALL persistent keys by slot so you can have multiple saves and retry missions.
+  // ============
+  (function applySaveSlot(){
+    const slot = (function(){
+      try{ return localStorage.getItem("np_active_save_slot") || "slot1"; }catch(_){ return "slot1"; }
+    })();
+    CFG.saveKey = `${CFG.saveKey}__${slot}`;
+    CFG.invKey  = `${CFG.invKey}__${slot}`;
+    CFG.devKey  = `${CFG.devKey}__${slot}`;
+    CFG.progKey = `${CFG.progKey}__${slot}`;
+  })();
+
+
+
+  // ============
+  // Canvas + DPR
+  // ============
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d", { alpha:false });
+
+  // ============================================================
+  // ✅ GLOBAL SPRITE SCALE CACHE (fix wolf lag without editing enemies.js)
+  // ============================================================
+  const SPRITE_SCALE_CACHE = (() => {
+    const cache = new Map(); // key -> canvas
+    const wanted = [
+      "/assets/enemies/wolf/",
+      "assets/enemies/wolf/",
+      "/assets/enemies/wyvern/",
+      "assets/enemies/wyvern/"
+    ];
+    function isWolfSrc(src){
+      if(!src) return false;
+      const s = String(src);
+      return wanted.some(x => s.includes(x));
+    }
+    function keyFor(img, w, h){
+      const src = img?.currentSrc || img?.src || "";
+      return src + "|" + (w|0) + "x" + (h|0);
+    }
+    function getScaled(img, w, h){
+      if(!img || !img.complete || !img.naturalWidth || w<=0 || h<=0) return null;
+      const k = keyFor(img,w,h);
+      let c = cache.get(k);
+      if(c) return c;
+      c = document.createElement("canvas");
+      c.width = w|0;
+      c.height = h|0;
+      const cctx = c.getContext("2d");
+      cctx.imageSmoothingEnabled = false;
+      try { cctx.drawImage(img, 0, 0, c.width, c.height); } catch(_) {}
+      cache.set(k, c);
+      return c;
+    }
+    return { isWolfSrc, getScaled };
+  })();
+
+  (function patchDrawImage(){
+    const _drawImage = ctx.drawImage.bind(ctx);
+    ctx.drawImage = function(...args){
+      try{
+        const img = args[0];
+        if(img && img.tagName === "IMG"){
+          const src = img.currentSrc || img.src || "";
+          if(SPRITE_SCALE_CACHE.isWolfSrc(src)){
+            if(args.length === 5){
+              const dx = args[1], dy = args[2], dw = args[3], dh = args[4];
+              const scaled = SPRITE_SCALE_CACHE.getScaled(img, dw, dh);
+              if(scaled) return _drawImage(scaled, dx, dy);
+            }
+            if(args.length === 9){
+              const sx = args[1], sy = args[2], sw = args[3], sh = args[4];
+              const dx = args[5], dy = args[6], dw = args[7], dh = args[8];
+              if((sx|0) === 0 && (sy|0) === 0 && (sw|0) === (img.naturalWidth|0) && (sh|0) === (img.naturalHeight|0)){
+                const scaled = SPRITE_SCALE_CACHE.getScaled(img, dw, dh);
+                if(scaled) return _drawImage(scaled, dx, dy);
+              }
+            }
+          }
+        }
+      }catch(_){}
+      return _drawImage(...args);
+    };
+  })();
+
+  // cached vignette overlay
+  const vignette = document.createElement("canvas");
+  const vctx = vignette.getContext("2d");
+  function rebuildVignette(){
+    vignette.width = canvas.width;
+    vignette.height = canvas.height;
+    vctx.setTransform(1,0,0,1,0,0);
+    vctx.clearRect(0,0,vignette.width,vignette.height);
+    const r0 = Math.min(vignette.width, vignette.height) * 0.2;
+    const r1 = Math.min(vignette.width, vignette.height) * 0.65;
+    const g = vctx.createRadialGradient(vignette.width/2, vignette.height/2, r0, vignette.width/2, vignette.height/2, r1);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.35)");
+    vctx.fillStyle = g;
+    vctx.fillRect(0,0,vignette.width,vignette.height);
+  }
+
+  // ============
+  // Utils
+  // ============
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+  }
+
+  // ============
+  // World state
+  // ============
+  const state = {
+    t: 0,
+    last: performance.now(),
+    world: { w: 1920, h: 1080 },
+    cam: {
+      x: 0, y: 0,
+      shake: 0, shakeT: 0,
+      zoom: (CFG.camera.zoom || 1.0),
+      zoomTarget: (CFG.camera.zoom || 1.0),
+      cineActive: false,
+      cineNpcId: null,
+      _lastZoom: (CFG.camera.zoom || 1.0),
+    },
+    player: { x: 320, y: 320, vx: 0, vy: 0, faceX: 0, faceY: 1, hp:100, hurtT:0, slowMul:1, _slowT:0 },
+    mini: { enabled:false },
+    convo: { npcId:null },
+    zoneId: null,
+  };
+
+
+  // Expose core state for cross-page encounters (duels, arenas, etc.)
+  // Dialogue actions can read this to store/restore player position.
+  window.__LEVEL1_STATE__ = state;
+  function getZoom(){ return state.cam.zoom || 1.0; }
+
+  // ============
+  // ✅ Mouse aim (screen -> world)
+  // ============
+  const mouse = { x:0, y:0, wx:0, wy:0, inside:false };
+
+  function updateMouseWorldFromClient(clientX, clientY){
+    const rect = canvas.getBoundingClientRect();
+    const cx = (clientX - rect.left) * (canvas.width  / rect.width);
+    const cy = (clientY - rect.top)  * (canvas.height / rect.height);
+    mouse.x = cx;
+    mouse.y = cy;
+    const zoom = getZoom();
+    mouse.wx = (cx / zoom) + state.cam.x;
+    mouse.wy = (cy / zoom) + state.cam.y;
+  }
+
+  canvas.addEventListener("mousemove", (e)=>{
+    mouse.inside = true;
+    updateMouseWorldFromClient(e.clientX, e.clientY);
+    try{ if(window.Combat && typeof Combat.onMouseMove === "function") Combat.onMouseMove(e); }catch(_){}
+  }, { passive:true });
+
+  canvas.addEventListener("mouseleave", ()=>{
+    mouse.inside = false;
+  }, { passive:true });
+
+  // ============
+  // PERF: viewport cache for giant maps
+  // ============
+  const mapCache = document.createElement("canvas");
+  const mapCacheCtx = mapCache.getContext("2d", { alpha:false });
+  mapCacheCtx.imageSmoothingEnabled = false;
+
+  let mapSource = null;
+  let cacheW = 0, cacheH = 0;
+  let cacheSX = -999999, cacheSY = -999999;
+  let cacheTimer = 0;
+  const MAP_CACHE = { hz: 20, movePx: 6 };
+
+  function ensureMapCacheSize(){
+    const zoom = getZoom();
+    const viewW = Math.ceil(canvas.width / zoom);
+    const viewH = Math.ceil(canvas.height / zoom);
+    if(viewW !== cacheW || viewH !== cacheH){
+      cacheW = viewW; cacheH = viewH;
+      mapCache.width = cacheW;
+      mapCache.height = cacheH;
+      cacheSX = -999999; cacheSY = -999999;
+    }
+  }
+
+  function refreshMapCache(force=false){
+    if(!mapSource || CFG.worldScale !== 1) return;
+    ensureMapCacheSize();
+
+    const viewW = cacheW, viewH = cacheH;
+    let sx = Math.floor(state.cam.x);
+    let sy = Math.floor(state.cam.y);
+
+    sx = clamp(sx, 0, Math.max(0, state.world.w - viewW));
+    sy = clamp(sy, 0, Math.max(0, state.world.h - viewH));
+
+    const moved = (Math.abs(sx - cacheSX) + Math.abs(sy - cacheSY)) >= MAP_CACHE.movePx;
+    if(!force && !moved) return;
+
+    cacheSX = sx; cacheSY = sy;
+
+    mapCacheCtx.setTransform(1,0,0,1,0,0);
+    mapCacheCtx.clearRect(0,0,viewW,viewH);
+    mapCacheCtx.drawImage(mapSource, sx, sy, viewW, viewH, 0, 0, viewW, viewH);
+  }
+
+  function resize() {
+    const raw = (window.devicePixelRatio || 1);
+    const dpr = Math.max(0.85, Math.min(CFG.maxDpr, raw));
+    const w = Math.floor(window.innerWidth * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    canvas.width = w; canvas.height = h;
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.imageSmoothingEnabled = false;
+
+    rebuildVignette();
+    ensureMapCacheSize();
+    refreshMapCache(true);
+  }
+  window.addEventListener("resize", resize, {passive:true});
+  resize();
+
+  // ============
+  // UI / HUD
+  // ============
+  const ui = {
+    status: document.getElementById("status"),
+    pos: document.getElementById("pos"),
+    zone: document.getElementById("zone"),
+    hp: document.getElementById("hp"),
+    toast: document.getElementById("toast"),
+    toastT: document.getElementById("toastT"),
+    toastB: document.getElementById("toastB"),
+    overlay: document.getElementById("overlay"),
+    cutsceneOverlay: document.getElementById("cutsceneOverlay"),
+    csTitle: document.getElementById("csTitle"),
+    csSub: document.getElementById("csSub"),
+    csBody: document.getElementById("csBody"),
+    csNext: document.getElementById("csNext"),
+    csSkip: document.getElementById("csSkip"),
+    dlgWho: document.getElementById("dlgWho"),
+    dlgLog: document.getElementById("dlgLog"),
+    say: document.getElementById("say"),
+    miniWrap: document.getElementById("mini"),
+
+    // ✅ progression HUD
+    plvl: document.getElementById("plvl"),
+    pxp: document.getElementById("pxp"),
+    pxpN: document.getElementById("pxpN"),
+  };
+
+  function toast(title, body){
+    ui.toastT.textContent = title;
+    ui.toastB.innerHTML = body;
+    ui.toast.style.display = "block";
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => ui.toast.style.display = "none", 2400);
+  }
+
+  // ============
+  // Dialogue zoom helpers
+  // ============
+  function beginDialogueZoom(npcId){
+    state.cam.cineActive = true;
+    state.cam.cineNpcId = npcId || null;
+    state.cam.zoomTarget = clamp((CFG.camera.zoom || 1.0) * 3.0, 1.0, 6.0);
+  }
+  function endDialogueZoom(){
+    state.cam.cineActive = false;
+    state.cam.cineNpcId = null;
+    state.cam.zoomTarget = (CFG.camera.zoom || 1.0);
+  }
+
+  function openDialog(title){
+    ui.overlay.style.display = "flex";
+    ui.dlgWho.textContent = title;
+    ui.dlgLog.innerHTML = "";
+    ui.say.value = "";
+    ui.say.style.display = "";
+    document.getElementById("dlgSend").style.display = "";
+    ui.say.focus();
+  }
+  function closeDialog(){
+    ui.overlay.style.display = "none";
+    ui.say.value = "";
+    state.convo.npcId = null;
+    endDialogueZoom();
+    try{ if(window.DialogueRunner && typeof window.DialogueRunner.end==='function') window.DialogueRunner.end(); }catch(_){}
+    const old = document.getElementById("dlgChoices");
+    if(old) old.remove();
+    ui.say.style.display = "";
+    document.getElementById("dlgSend").style.display = "";
+  }
+
+  // ==========================
+  // Main Story Quest UI + hooks
+  // ==========================
+  // ============
+// Cutscenes (minimal overlay + quest integration)
+// ============
+const CutscenePlayer = (() => {
+  const played = new Set();
+  let open = false;
+  let activeId = null;
+  let activeLines = [];
+  let idx = 0;
+
+  function lookup(cutsceneId){
+    try{
+      const msq = window.MainStoryQuestSystem;
+      if(msq && msq.ENOCH_APPEARANCES){
+        const entries = Object.values(msq.ENOCH_APPEARANCES);
+        const hit = entries.find(e => e && e.cutsceneId === cutsceneId);
+        if(hit) return { title: hit.title || "Enoch", sub: "Vision", lines: (hit.lines||[]) };
+      }
+    }catch(_){}
+    return { title: "Cutscene", sub: cutsceneId || "—", lines: [] };
+  }
+
+  function render(){
+    if(!open) return;
+    const title = ui.csTitle, sub = ui.csSub, body = ui.csBody;
+    if(title) title.textContent = (activeId && lookup(activeId).title) || "Cutscene";
+    if(sub) sub.textContent = (activeId && lookup(activeId).sub) || "—";
+    if(body){
+      const t = activeLines[idx] || "";
+      body.textContent = t;
+    }
+  }
+
+  function close(markDone=true){
+    open = false;
+    ui.cutsceneOverlay.style.display = "none";
+    // release any dialogue zoom lock if you were in it
+    try{ endDialogueZoom?.(); }catch(_){}
+    if(markDone && activeId && window.MainStoryQuestSystem){
+      try{ MainStoryQuestSystem.cutsceneDone(activeId); }catch(_){}
+    }
+    activeId = null;
+    activeLines = [];
+    idx = 0;
+  }
+
+  function next(){
+    if(!open) return;
+    idx++;
+    if(idx >= activeLines.length){
+      close(true);
+      return;
+    }
+    render();
+  }
+
+  function play(cutsceneId){
+    if(!cutsceneId) return;
+    if(open && activeId === cutsceneId) return;
+    activeId = cutsceneId;
+    const data = lookup(cutsceneId);
+    activeLines = (data.lines && data.lines.length) ? data.lines.slice() : ["…", "(No cutscene text yet.)"];
+    idx = 0;
+
+    ui.cutsceneOverlay.style.display = "flex";
+    open = true;
+    played.add(cutsceneId);
+    render();
+  }
+
+  function hasPlayed(cutsceneId){ return played.has(cutsceneId); }
+  function isOpen(){ return open; }
+
+  // wire buttons once
+  function init(){
+    if(init._did) return;
+    init._did = true;
+    ui.csNext?.addEventListener("click", next);
+    ui.csSkip?.addEventListener("click", () => close(true));
+    // keyboard: Enter/E/Space to continue; Esc to skip
+    window.addEventListener("keydown", (e) => {
+      if(!open) return;
+      if(e.code === "Escape"){ e.preventDefault(); close(true); }
+      if(e.code === "Enter" || e.code === "Space" || e.code === "KeyE"){ e.preventDefault(); next(); }
+    });
+  }
+
+  return { init, play, close, next, hasPlayed, isOpen };
+})();
+
+CutscenePlayer.init();
+
+const QuestUI = (() => {
+    const elTitle = () => document.getElementById("qTitle");
+    const elObj = () => document.getElementById("qObjectives");
+
+    function fmtObj(o){
+      const need = (typeof o.count === "number") ? o.count : 1;
+      const have = (typeof o.progress === "number") ? o.progress : 0;
+      const done = !!o.isComplete;
+      const progTxt = (need > 1) ? ` (${Math.min(have, need)}/${need})` : "";
+      return { done, text: (o.text || o.type || "Objective") + progTxt };
+    }
+
+    function render(){
+      try{
+        if(!window.MainStoryQuestSystem) return;
+        const q = MainStoryQuestSystem.getActiveQuest?.();
+        if(!q){
+          if(elTitle()) elTitle().textContent = "—";
+          if(elObj()) elObj().innerHTML = "";
+          return;
+        }
+        if(elTitle()) elTitle().textContent = q.title || "Quest";
+
+// ✅ Auto-play required cutscene objective when it becomes the next required step
+try{
+  const nextReq = (q.objectives || []).find(o => (o.required !== false) && !o.isComplete);
+  if(nextReq && nextReq.type === "CUTSCENE_DONE" && nextReq.cutsceneId){
+    if(!CutscenePlayer.isOpen() && !CutscenePlayer.hasPlayed(nextReq.cutsceneId)){
+      CutscenePlayer.play(nextReq.cutsceneId);
+    }
+  }
+}catch(_){}
+
+        const list = elObj();
+        if(!list) return;
+        list.innerHTML = "";
+        (q.objectives || []).forEach(o => {
+          const li = document.createElement("li");
+          const f = fmtObj(o);
+          li.textContent = f.text;
+          li.style.marginBottom = "4px";
+          li.style.opacity = f.done ? "0.65" : "1";
+          if(f.done) li.style.textDecoration = "line-through";
+          list.appendChild(li);
+        });
+      }catch(_){}
+    }
+
+    function openJournal(){
+      try{
+        if(!window.MainStoryQuestSystem) return;
+        openDialog("Quest Journal");
+        beginDialogueZoom(null);
+        ui.dlgLog.innerHTML = "";
+
+        const q = MainStoryQuestSystem.getActiveQuest?.();
+        const journal = MainStoryQuestSystem.getJournal?.(30) || [];
+
+        if(q){
+          addLine("SYSTEM", "ACTIVE QUEST: " + String(q.title || "Quest"));
+          (q.objectives || []).forEach(o => {
+            const need = (typeof o.count === "number") ? o.count : 1;
+            const have = (typeof o.progress === "number") ? o.progress : 0;
+            const prog = (need > 1) ? ` (${Math.min(have, need)}/${need})` : "";
+            const done = !!o.isComplete;
+            addLine(done ? "✓" : "•", String(o.text || o.type || "Objective") + prog);
+          });
+        }else{
+          addLine("SYSTEM", "No active quest.");
+        }
+
+        addLine("SYSTEM", "----------------");
+        addLine("SYSTEM", "RECENT JOURNAL");
+        journal.slice().reverse().forEach(e => {
+          const t = (e && e.ts) ? new Date(e.ts).toLocaleString() : "";
+          const msg = (e && e.text) ? e.text : String(e || "");
+          addLine(t || "—", msg);
+        });
+
+        setDialogControls({
+          mode:"script",
+          buttons:[
+            { label:"Close", onClick: closeDialog }
+          ]
+        });
+      }catch(_){}
+    }
+
+    function toastQuestAdvance(res){
+      try{
+        if(!res || !res.advanced || !res.activeQuest) return;
+        toast("Quest Updated", `New quest: <span class='k'>${escapeHtml(res.activeQuest.title || "Quest")}</span>`);
+      }catch(_){}
+    }
+
+    function npcIdForSlot(devSlot){
+      const ms = window.MainStoryQuestSystem;
+      if(!ms || !ms.NPCS) return null;
+      switch(Number(devSlot)){
+        case 12: return ms.NPCS.ENOCH;                 // Enoch
+        case 29: return ms.NPCS.HUNTER_LEAD;           // Hunter
+        case 11: return ms.NPCS.TROLL_CHIEFTAIN;       // Troll Chieftain
+        case 28: return ms.NPCS.NAAMRIEL;              // Naamriel
+        case 8:  return ms.NPCS.NAAMRIEL_SON;          // Naamriel's son (Nephilim)
+        case 19: return ms.NPCS.ZURIEL;                // Zuriel
+        case 20: return ms.NPCS.GUARD_CAPTAIN;         // Guard Captain
+        case 27: return ms.NPCS.NEPHILIM_RULER;         // City ruler
+        case 25: return ms.NPCS.WATCHER_BOSS;           // Watcher deity/boss
+        default: return null;
+      }
+    }
+
+    function onTalkSlot(devSlot){
+      try{
+        if(!window.MainStoryQuestSystem) return null;
+        const npcId = npcIdForSlot(devSlot);
+        if(!npcId) return null;
+        const res = MainStoryQuestSystem.talk(npcId);
+        toastQuestAdvance(res);
+        return res;
+      }catch(_){
+        return null;
+      }
+    }
+
+    function init(){
+  // ✅ only run once (prevents setInterval spam)
+  if(init._did) return;
+  init._did = true;
+  try{
+    window.MainStoryQuestSystem?.init?.();
+    render();
+    // light refresh (keeps HUD current even if you complete objectives via combat)
+    setInterval(render, 450);
+  }catch(_){}
+}
+
+    return { init, render, openJournal, onTalkSlot };
+  })();
+
+  document.getElementById("dlgClose").addEventListener("click", closeDialog);
+
+  // ============
+  // ✅ Progression (INLINE FALLBACK)
+  // - Level 1 -> 20
+  // - Damage scaling applied by wrapping EnemySystem.damageEnemy
+  // - Level up ONLY by interacting with NPC #19
+  // ============
+  (function ensureProgression(){
+    if(window.Progression) return;
+
+    const P = {};
+    window.Progression = P;
+
+    const SAVE_KEY = CFG.progKey;
+    const MAX_LVL = 20;
+
+    // XP curve: grows steadily; feels good for 20 levels.
+    // lvl 1 requires ~10, ramps to ~300-ish by high levels
+    function xpToNext(level){
+      level = Math.max(1, Math.min(MAX_LVL, level|0));
+      if(level >= MAX_LVL) return 0;
+      // smooth-ish curve
+      return Math.floor(10 + (level-1)*6 + Math.pow(level-1, 1.6)*4);
+    }
+
+    // You asked: wolf should take ~5 sword swings at level 1.
+    // Your base melee dmg is 18, wolf HP is 30.
+    // So we set L1 dmg multiplier so 18 * mult ≈ 6 => 5 hits.
+    function dmgMultForLevel(level){
+      level = Math.max(1, Math.min(MAX_LVL, level|0));
+      const t = (level-1)/(MAX_LVL-1); // 0..1
+      // starts ~0.34 and climbs to ~2.10
+      const a = 0.34;
+      const b = 2.10;
+      // ease-in curve (stronger growth late game)
+      const eased = Math.pow(t, 1.15);
+      return a + (b-a)*eased;
+    }
+
+    const XP_BY_TYPE = {
+      "wolf": 10,
+      "goblin": 12,
+      "bandit": 14,
+      "cultist": 16,
+      "giant spider": 15,
+      "bear": 22,
+      "wight": 20,
+      "mummy": 26,
+      "banshee": 30,
+      "dark knight": 40,
+      "lich": 44,
+      "griffon": 46,
+      "harpy": 32,
+      "wyvern": 52,
+      "chimera": 58,
+      "troll": 60,
+      "corrupted treant": 70,
+    };
+
+    const data = {
+      level: 1,
+      xp: 0
+    };
+
+    function load(){
+      try{
+        const raw = localStorage.getItem(SAVE_KEY);
+        if(!raw) return;
+        const d = JSON.parse(raw);
+        if(d && typeof d === "object"){
+          if(typeof d.level === "number") data.level = Math.max(1, Math.min(MAX_LVL, d.level|0));
+          if(typeof d.xp === "number") data.xp = Math.max(0, d.xp|0);
+        }
+      }catch(_){}
+    }
+    function save(){
+      try{ localStorage.setItem(SAVE_KEY, JSON.stringify({ level:data.level, xp:data.xp })); }catch(_){}
+    }
+
+    P.getLevel = ()=>data.level;
+    P.getXp = ()=>data.xp;
+    P.getXpToNext = ()=>xpToNext(data.level);
+    P.getDamageMult = ()=>dmgMultForLevel(data.level);
+
+    P.addXp = (amount)=>{
+      const n = Math.max(0, amount|0);
+      if(!n) return;
+      if(data.level >= MAX_LVL) return;
+      data.xp += n;
+      save();
+    };
+
+    // Called by enemies.js (we added hook there)
+    P.onEnemyKilled = (enemy)=>{
+      try{
+        if(!enemy || !enemy.type) return;
+        if(data.level >= MAX_LVL) return;
+        const t = String(enemy.type).toLowerCase().trim();
+        const base = XP_BY_TYPE[t] || 10;
+        // slight bonus if you're underleveled (keeps early game from dragging)
+        const bonus = (data.level <= 4) ? Math.ceil(base*0.15) : 0;
+        P.addXp(base + bonus);
+      }catch(_){}
+    };
+
+    // Level-up is ONLY via NPC 19
+    P.openTrainer = (trainerName)=>{
+      const lvl = data.level;
+      const need = xpToNext(lvl);
+      const title = (trainerName && trainerName.trim()) ? trainerName.trim() : "The Trainer";
+
+      openDialog(title);
+      beginDialogueZoom(state.convo.npcId);
+
+      addLine(title, "Bring me the experience you’ve earned in the wilds, and I will shape it into strength.");
+      if(lvl >= MAX_LVL){
+        addLine("SYSTEM", "You are already at the level cap (20).");
+        setDialogControls({ mode:"script", buttons:[{label:"Close", onClick: closeDialog}] });
+        return;
+      }
+
+      addLine("SYSTEM", `Level: ${lvl}  •  XP: ${data.xp}/${need}`);
+      addLine("SYSTEM", `Damage Multiplier: x${P.getDamageMult().toFixed(2)} (affects sword/fireball/shockwave)`);
+
+      setDialogControls({
+        mode:"script",
+        buttons:[
+          {
+            label: (data.xp >= need) ? `Level Up (cost ${need} XP)` : `Need ${need-data.xp} more XP`,
+            onClick: ()=>{
+              if(data.level >= MAX_LVL){
+                toast("Max level", "Already level 20.");
+                closeDialog();
+                return;
+              }
+              const req = xpToNext(data.level);
+              if(data.xp < req){
+                toast("Not enough XP", `You need <span class="k">${req-data.xp}</span> more XP.`);
+                return;
+              }
+              data.xp -= req;
+              data.level += 1;
+              save();
+              toast("Level Up!", `You reached <span class="k">Level ${data.level}</span>.`);
+              // refresh the trainer UI
+              P.openTrainer(title);
+            }
+          },
+          { label:"Close", onClick: closeDialog }
+        ]
+      });
+    };
+
+    load();
+  })();
+
+  // ============
+  // Inventory + Loot pickups
+  // ============
+  const inventory = { items:{} };
+  function invLoad(){
+    try{
+      const raw = localStorage.getItem(CFG.invKey);
+      if(!raw) return;
+      const data = JSON.parse(raw);
+      if(data && typeof data === "object" && data.items && typeof data.items === "object"){
+        inventory.items = data.items;
+      }
+    }catch(_){}
+  }
+  function invSave(){
+    try{ localStorage.setItem(CFG.invKey, JSON.stringify({ items: inventory.items })); }catch(_){}
+  }
+  function invAdd(itemId, n=1){
+    if(!itemId) return;
+    const k = String(itemId);
+    inventory.items[k] = (inventory.items[k]||0) + Math.max(1, n|0);
+    invSave();
+  }
+  function invToLines(max=120){
+    const entries = Object.entries(inventory.items)
+      .filter(([,v])=>Number(v)>0)
+      .sort((a,b)=>String(a[0]).localeCompare(String(b[0])));
+    if(entries.length === 0) return ["(empty)"];
+    const lines = [];
+    for(const [k,v] of entries){
+      lines.push(`${k}  x${v}`);
+      if(lines.length >= max) { lines.push("…"); break; }
+    }
+    return lines;
+  }
+
+  const pickups = [];
+  function spawnPickup(x,y,item,rarity){
+    pickups.push({ id: "p_"+Math.random().toString(16).slice(2,9), x, y, r: 10, item, rarity, life: 90 });
+  }
+  function pickupColor(r){
+    if(r==="rare") return "rgba(255,215,120,.95)";
+    if(r==="uncommon") return "rgba(160,255,180,.95)";
+    return "rgba(200,220,255,.95)";
+  }
+  function nearestPickup(){
+    const p = state.player;
+    let best = null;
+    for(const it of pickups){
+      const d = Math.hypot(it.x - p.x, it.y - p.y);
+      if(d <= it.r + 160){
+        if(!best || d < best.d) best = { it, d };
+      }
+    }
+    return best;
+  }
+  function collectPickup(pk){
+    invAdd(pk.item, 1);
+    toast("Loot collected", `<span class="k">${escapeHtml(pk.item)}</span> • <span class="k">${escapeHtml(pk.rarity)}</span>`);
+    const idx = pickups.indexOf(pk);
+    if(idx >= 0) pickups.splice(idx,1);
+  }
+
+  // ============
+  // Drops system (unchanged)
+  // ============
+  let DROPS = {};
+  const DEFAULT_DROPS = {
+    common:   ["scrap", "berries", "cloth"],
+    uncommon: ["iron", "bandage", "mana_shard"],
+    rare:     ["rune", "gem", "ancient_coin"],
+  };
+  function normTypeKey(s){
+    return String(s||"").toLowerCase().trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function normalizeDrops(data){
+    const out = {};
+    if(!data || typeof data !== "object") return out;
+    for(const [k, v] of Object.entries(data)){
+      const key = normTypeKey(k);
+      if(!key || !v || typeof v !== "object") continue;
+      const common   = Array.isArray(v.common)   ? v.common.filter(x=>typeof x==="string" && x.trim())   : [];
+      const uncommon = Array.isArray(v.uncommon) ? v.uncommon.filter(x=>typeof x==="string" && x.trim()) : [];
+      const rare     = Array.isArray(v.rare)     ? v.rare.filter(x=>typeof x==="string" && x.trim())     : [];
+      out[key] = { common, uncommon, rare };
+    }
+    return out;
+  }
+  function getDropTable(enemyType){
+    const k = normTypeKey(enemyType);
+    if(DROPS[k]) return DROPS[k];
+    const k2 = k.replace(/\s/g, "_");
+    if(DROPS[k2]) return DROPS[k2];
+    return DEFAULT_DROPS;
+  }
+  async function loadDrops(){
+    if(window.ENEMY_DROPS && typeof window.ENEMY_DROPS === "object"){
+      DROPS = normalizeDrops(window.ENEMY_DROPS);
+      return { ok:true, mode:"script" };
+    }
+    if(!CFG.dropsPreferFile) { DROPS = {}; return { ok:false, mode:"off" }; }
+    try{
+      const res = await fetch(CFG.dropsUrl, { cache:"no-store" });
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const data = await res.json();
+      DROPS = normalizeDrops(data);
+      return { ok:true, mode:"fetch" };
+    }catch(_){
+      DROPS = {};
+      return { ok:false, mode:"default" };
+    }
+  }
+  function rollRarity(){
+    const r = Math.random();
+    if(r < 0.06) return "rare";
+    if(r < 0.26) return "uncommon";
+    return "common";
+  }
+  function rollDropsForType(enemyType, count=1){
+    const table = getDropTable(enemyType);
+    const drops = [];
+    for(let i=0;i<count;i++){
+      const rarity = rollRarity();
+      const pool = (table[rarity] || []).filter(x => typeof x === "string" && x.trim());
+      const fallback = (table.common || []).filter(x => typeof x === "string" && x.trim());
+      const usePool = pool.length ? pool : fallback;
+      if(!usePool.length) continue;
+      drops.push({ item: usePool[(Math.random()*usePool.length)|0], rarity: pool.length ? rarity : "common" });
+    }
+    return drops;
+  }
+  function spawnLootAt(x,y,enemyType){
+    let count = 1;
+    if(Math.random() < 0.22) count++;
+    if(Math.random() < 0.08) count++;
+    const rolled = rollDropsForType(enemyType, count);
+    if(rolled.length === 0) return;
+    for(let i=0;i<rolled.length;i++){
+      const a = Math.random()*Math.PI*2;
+      const rr = 10 + Math.random()*14;
+      spawnPickup(x + Math.cos(a)*rr, y + Math.sin(a)*rr, rolled[i].item, rolled[i].rarity);
+    }
+    const shown = rolled.slice(0,2).map(d=>`<span class="k">${escapeHtml(d.item)}</span>`).join(" ");
+    const more = rolled.length > 2 ? ` +${rolled.length-2} more` : "";
+    toast("Enemy dropped loot", shown + more);
+  }
+
+  // ============
+  // Dialogue
+  // ============
+  function addLine(role, text){
+    const div = document.createElement("div");
+    div.className = "line";
+    div.innerHTML = `<span class="role">${escapeHtml(role)}:</span> ${escapeHtml(text)}`;
+    ui.dlgLog.appendChild(div);
+    ui.dlgLog.scrollTop = ui.dlgLog.scrollHeight;
+  }
+  function setDialogControls({ mode="chat", buttons=[] }){
+    const say = ui.say;
+    const sendBtn = document.getElementById("dlgSend");
+    const old = document.getElementById("dlgChoices");
+    if(old) old.remove();
+
+    if(mode === "chat"){
+      say.style.display = "";
+      sendBtn.style.display = "";
+      return;
+    }
+
+    say.style.display = "none";
+    sendBtn.style.display = "none";
+
+    const wrap = document.createElement("div");
+    wrap.id = "dlgChoices";
+    wrap.style.display = "flex";
+    wrap.style.flexWrap = "wrap";
+    wrap.style.gap = "10px";
+    wrap.style.alignItems = "center";
+    wrap.style.width = "100%";
+
+    for(const b of buttons){
+      const btn = document.createElement("button");
+      btn.textContent = b.label;
+      btn.addEventListener("click", b.onClick);
+      wrap.appendChild(btn);
+    }
+
+    ui.say.parentElement.insertBefore(wrap, ui.say);
+  }
+  window.DLG_API = { addLine, setDialogControls, closeDialog };
+
+  function npcStub(npc, playerText){
+    const t = playerText.toLowerCase();
+    if(t.includes("hello") || t.includes("hi")) return "Yeah? Keep it quick.";
+    if(t.includes("where") && (t.includes("go") || t.includes("am i"))) return "You’re in the outer green. Follow the path lines—if your map has them.";
+    if(t.includes("save") || t.includes("checkpoint")) return "Campfires mark safe moments. Touch one and it sticks.";
+    if(t.includes("help") || t.includes("tips")) return "Move slow near tight terrain. Use the minimap (M) to keep your bearings.";
+    return npc.lines[Math.floor(Math.random()*npc.lines.length)];
+  }
+  function handleDialogSend(){
+    const text = ui.say.value.trim();
+    if(!text) return;
+    ui.say.value = "";
+    addLine("YOU", text);
+    const npc = interactables.find(x => x.id === state.convo.npcId);
+    if(npc && npc.kind === "npc") addLine(npc.title, npcStub(npc, text));
+    else addLine("SYSTEM", "No one is listening.");
+  }
+  document.getElementById("dlgSend").addEventListener("click", handleDialogSend);
+  ui.say.addEventListener("keydown", (e)=>{ if(e.key === "Enter") handleDialogSend(); });
+
+  // ============
+  // Save / Load
+  // ============
+  function loadSave(){
+    try{
+      const raw = localStorage.getItem(CFG.saveKey);
+      if(!raw) return null;
+      const s = JSON.parse(raw);
+      if(s && typeof s.x==="number" && typeof s.y==="number") return s;
+    }catch(_){ }
+    return null;
+  }
+  function saveGame(){
+    const s = { x: state.player.x, y: state.player.y, faceX: state.player.faceX, faceY: state.player.faceY, hp: state.player.hp, ts: Date.now() };
+    try{
+      localStorage.setItem(CFG.saveKey, JSON.stringify(s));
+      toast("Saved", "Checkpoint stored.");
+    }catch(_){
+      toast("Save failed", "Could not write to localStorage.");
+    }
+  }
+  function ensurePlayerInBounds(){
+    const r = CFG.player.radius;
+    state.player.x = clamp(state.player.x, r, state.world.w - r);
+    state.player.y = clamp(state.player.y, r, state.world.h - r);
+  }
+
+  // ============
+  // Points / Dev data
+  // ============
+  let devData = (window.PointsLoader && PointsLoader.loadDev) ? PointsLoader.loadDev(CFG.devKey) : { playerSpawn:null, npcSlots:Array.from({length:30},()=>null), enemySpawns:[] };
+
+  function applySpawnPriority(){
+    // Duel return override (applied BEFORE points/save spawn)
+    try{
+      // Prefer staged override from bridge; otherwise read pack directly.
+      let ov = window.__DUEL_RETURN_OVERRIDE__ || null;
+      if(!ov){
+        const raw = localStorage.getItem("np_duel_return_state_v1");
+        if(raw){
+          const pack = JSON.parse(raw);
+          if(pack && pack.type === "duel_return_state" && pack.player) ov = pack.player;
+        }
+      }
+      if(ov && isFinite(ov.x) && isFinite(ov.y)){
+        state.player.x = Number(ov.x);
+        state.player.y = Number(ov.y);
+        if(isFinite(ov.faceX)) state.player.faceX = Number(ov.faceX);
+        if(isFinite(ov.faceY)) state.player.faceY = Number(ov.faceY);
+        state.player.vx = state.player.vy = 0;
+        ensurePlayerInBounds();
+        // consume
+        window.__DUEL_RETURN_OVERRIDE__ = null;
+        localStorage.removeItem("np_duel_return_state_v1");
+        toast("Return", "Returned from <span class='k'>duel</span>.");
+        return;
+      }
+    }catch(e){
+      console.warn("applySpawnPriority duel override failed:", e);
+    }
+
+
+    if(devData.playerSpawn){
+      state.player.x = devData.playerSpawn.x;
+      state.player.y = devData.playerSpawn.y;
+      state.player.vx = state.player.vy = 0;
+      ensurePlayerInBounds();
+      toast("Spawn", "Player spawned from <span class='k'>points/save spawn</span>.");
+      return;
+    }
+    const s = loadSave();
+    if(s){
+      state.player.x = s.x; state.player.y = s.y;
+      if(typeof s.faceX==="number") state.player.faceX = s.faceX;
+      if(typeof s.faceY==="number") state.player.faceY = s.faceY;
+      if(typeof s.hp==="number") state.player.hp = Math.max(0, Math.min(100, s.hp));
+      ui.hp.textContent = String(Math.round(state.player.hp));
+      ensurePlayerInBounds();
+      toast("Save loaded", "Spawn set from <span class='k'>localStorage</span>.");
+    }else{
+      ensurePlayerInBounds();
+    }
+  }
+
+  // ============
+  // Interactables (unchanged + trainer support)
+  // ============
+  const CFG_INTERACT = {
+    baseInteractables: [
+      { id:"sign_1", name:"Old Signpost", x:520, y:420, r:26, kind:"text", title:"Old Signpost", text:"The forest hums with something ancient." },
+      { id:"campfire", name:"Cold Campfire", x:860, y:620, r:30, kind:"checkpoint", title:"Checkpoint", text:"You rest a moment. Game saved." },
+      { id:"npc_scout", name:"Scout", x:1120, y:380, r:28, kind:"npc", title:"Scout",
+        lines:[
+          "Keep your eyes open. The woods move when you're not looking.",
+          "If you get lost, follow the brighter moss. It points home… sometimes.",
+          "I heard something near the river. Not a wolf."
+        ]
+      },
+
+      // ✅ OPTIONAL fallback trainer (only used if NPC slot 19 is NOT placed in points)
+      // Comment out if you never want a default.
+      { id:"npc_trainer_fallback", name:"Trainer", x:760, y:520, r:28, kind:"npc", title:"Trainer",
+        lines:[ "Return when you have experience to spend." ],
+        devSlot: 19
+      },
+    ],
+    zones: [
+      // ✅ Circle zones supported: {id, name, x, y, r} where x/y is center and r is radius.
+      { id:"zone.empty_grove_sw", name:"Ash Grove", x:377, y:9001, r:50 },
+      { id:"zone.hunters_cabin_cw", name:"Cabin of Teeth", x:600, y:7011, r:50 },
+      { id:"zone.troll_camp_cn", name:"Bonefires (Troll Camp)", x:4459, y:2493, r:100 },
+      { id:"zone.world", name:"Meadow", x:0, y:0, w:999999, h:999999 }
+    ],
+  };
+
+  let interactables = [];
+  function rebuildInteractables(){
+    interactables = CFG_INTERACT.baseInteractables.map(x => ({...x}));
+
+    // if points provides slot 19, remove fallback trainer to avoid duplicates
+    const has19 = !!(devData && devData.npcSlots && devData.npcSlots[18]);
+    if(has19){
+      interactables = interactables.filter(it => !(it && it.devSlot === 19 && it.id === "npc_trainer_fallback"));
+    }
+
+    for(let i=0;i<30;i++){
+      const n = devData.npcSlots[i];
+      if(!n) continue;
+      const slot = i+1;
+      const slotName = (slot === 12) ? "Enoch" : (slot === 11) ? "Kur-Duggal" : (slot === 19) ? "Zuriel" : (slot === 29) ? "Shamash-nasir" : ((n.name && n.name.trim()) ? n.name.trim() : ("NPC " + slot));
+      interactables.push({
+        id: "dev_npc_"+slot,
+        name: slotName,
+        x: n.x, y: n.y, r: 28,
+        kind: "npc",
+        title: slotName,
+        lines: [
+          `I'm NPC ${slot}. (Stub dialogue — wire to AI later.)`,
+          "Placed from points/save data.",
+          "Give me a real brain and I'll talk your ear off."
+        ],
+        devSlot: slot,
+        isZuriel: (slot === 19),
+        isEnoch: (slot === 12),
+        isNasir: (slot === 29),
+        isTrollChief: (slot === 11),
+        isWitch: (slot===28),
+        homeX: n.x,
+        homeY: n.y,
+        wanderRadius: (slot===28 ? 150 : 0),
+        wanderSpeed: (slot===28 ? 22 : 0)
+      });
+    }
+  
+
+// ✅ Keep Cabin of Teeth zone centered on NPC #29 (Shamash-nasir) if he exists in points.
+// This prevents coordinate mismatches between your Tiled points and the zone center.
+try{
+  const hunterNpc = interactables.find(o => o && o.kind==="npc" && o.devSlot===29);
+  const z = CFG_INTERACT.zones.find(z => z && z.id==="zone.hunters_cabin_cw");
+  if(hunterNpc && z && typeof z.r==="number"){
+    z.x = hunterNpc.x;
+    z.y = hunterNpc.y;
+  }
+}catch(_){}}
+
+  // ============
+  // Witch roaming (unchanged)
+  // ============
+  const npcWanderState = new Map();
+  function _ws(it){
+    let s = npcWanderState.get(it.id);
+    if(!s){
+      s = { x0: (typeof it.homeX==='number'?it.homeX:it.x), y0: (typeof it.homeY==='number'?it.homeY:it.y), tx: it.x, ty: it.y, vx:0, vy:0, thinkT:0, idleT:0 };
+      npcWanderState.set(it.id, s);
+    }
+    return s;
+  }
+  function updateNpcWander(dt){
+    for(const it of interactables){
+      if(!it || !it.isWitch) continue;
+      const rad = Math.max(0, it.wanderRadius||0);
+      const spd = Math.max(0, it.wanderSpeed||0);
+      if(rad <= 0 || spd <= 0) continue;
+
+      const s = _ws(it);
+      if(typeof it.homeX === "number") s.x0 = it.homeX;
+      if(typeof it.homeY === "number") s.y0 = it.homeY;
+
+      s.thinkT = Math.max(0, s.thinkT - dt);
+      s.idleT  = Math.max(0, s.idleT  - dt);
+
+      if(s.idleT > 0){
+        const fk = 1 - Math.exp(-10*dt);
+        s.vx *= (1 - fk);
+        s.vy *= (1 - fk);
+      }else{
+        if(s.thinkT <= 0){
+          if(Math.random() < 0.35){
+            s.idleT = 0.6 + Math.random()*1.4;
+            s.thinkT = 0.4;
+            s.tx = it.x; s.ty = it.y;
+          }else{
+            const a = Math.random()*Math.PI*2;
+            const rr = Math.random()*rad;
+            s.tx = s.x0 + Math.cos(a)*rr;
+            s.ty = s.y0 + Math.sin(a)*rr;
+            s.thinkT = 0.8 + Math.random()*1.4;
+          }
+        }
+
+        const dx = s.tx - it.x, dy = s.ty - it.y;
+        const d = Math.hypot(dx,dy);
+        if(d < 2){
+          s.idleT = 0.35 + Math.random()*0.8;
+        }else{
+          const nx = dx / (d||1), ny = dy / (d||1);
+          const k = 1 - Math.exp(-6*dt);
+          s.vx += (nx*spd - s.vx) * k;
+          s.vy += (ny*spd - s.vy) * k;
+        }
+      }
+
+      it.x += s.vx * dt;
+      it.y += s.vy * dt;
+
+      const ox = it.x - s.x0, oy = it.y - s.y0;
+      const od = Math.hypot(ox,oy);
+      if(od > rad){
+        const nx = ox / (od||1), ny = oy / (od||1);
+        it.x = s.x0 + nx*rad;
+        it.y = s.y0 + ny*rad;
+        s.vx *= 0.35; s.vy *= 0.35;
+      }
+
+      it.x = clamp(it.x, 0, state.world.w);
+      it.y = clamp(it.y, 0, state.world.h);
+    }
+  }
+
+  // =====================
+  // Na’amriel sprite (unchanged)
+  // =====================
+  const NAAMRIEL = {
+    ready: false,
+    walk: { frames:[null], count:4, fps:8 },
+    talk: { frames:[null], count:12, fps:10 },
+    loaded: 0,
+    total: 4 + 12,
+    idleFrame: 1,
+    size: 56,
+    cache: { walk: [], talk: [] },
+    _cacheBuilt: false
+  };
+
+  (function preloadNaamriel(){
+    function loadSet(store, base, count){
+      for(let i=1;i<=count;i++){
+        const img = new Image();
+        img.src = base + i + ".png";
+        img.onload = img.onerror = () => {
+          NAAMRIEL.loaded++;
+          if(NAAMRIEL.loaded >= NAAMRIEL.total) NAAMRIEL.ready = true;
+        };
+        store.frames[i] = img;
+      }
+    }
+    loadSet(NAAMRIEL.walk, "assets/npc/naamriel/walk/", NAAMRIEL.walk.count);
+    loadSet(NAAMRIEL.talk, "assets/npc/naamriel/talking/", NAAMRIEL.talk.count);
+  })()
+
+
+  // ============
+  // Zuriel (NPC #19) sprite — idle 1-7 loop; talk 1-4 once then loop 4-9 while dialogue open
+  // (Downscaled to 56x56 canvases to prevent lag)
+  // ============
+  const ZURIEL = {
+    ready:false,
+    idle:{ frames:[null], count:7, fps:7 },
+    talk:{ frames:[null], count:9, fps:10 },
+    loadedOk:0,
+    loadedDone:0,
+    total:7+9,
+    size:56,
+    cache:{ idle:[], talk:[] },
+    _cacheBuilt:false,
+    _wasTalking:false,
+    _talkStartT:0
+  };
+
+  (function preloadZuriel(){
+    function loadSet(store, base, count){
+      for(let i=1;i<=count;i++){
+        const img = new Image();
+        img.src = base + i + ".png";
+        img.onload = ()=>{
+          ZURIEL.loadedOk++;
+          ZURIEL.loadedDone++;
+          if(ZURIEL.loadedDone >= ZURIEL.total) ZURIEL.ready = true;
+        };
+        img.onerror = ()=>{
+          ZURIEL.loadedDone++;
+          if(ZURIEL.loadedDone >= ZURIEL.total) ZURIEL.ready = true;
+          try{ console.warn("[ZURIEL] Missing sprite:", img.src); }catch(_){}
+        };
+        store.frames[i] = img;
+      }
+    }
+    loadSet(ZURIEL.idle, "assets/npc/zuriel/idle/", ZURIEL.idle.count);
+    loadSet(ZURIEL.talk, "assets/npc/zuriel/talk/", ZURIEL.talk.count);
+  })();
+
+  function buildZurielCache(){
+    if(ZURIEL._cacheBuilt) return;
+    if(!ZURIEL.ready) return;
+
+    const makeScaled = (img)=>{
+      if(!img || !img.complete || !img.naturalWidth) return null;
+      const c = document.createElement("canvas");
+      c.width = ZURIEL.size;
+      c.height = ZURIEL.size;
+      const cctx = c.getContext("2d");
+      cctx.imageSmoothingEnabled = false;
+      cctx.clearRect(0,0,c.width,c.height);
+      try { cctx.drawImage(img, 0, 0, c.width, c.height); } catch(_){}
+      return c;
+    };
+
+    for(let i=1;i<=ZURIEL.idle.count;i++) ZURIEL.cache.idle[i] = makeScaled(ZURIEL.idle.frames[i]);
+    for(let i=1;i<=ZURIEL.talk.count;i++) ZURIEL.cache.talk[i] = makeScaled(ZURIEL.talk.frames[i]);
+    ZURIEL._cacheBuilt = true;
+  }
+
+  function drawZuriel(it){
+    const dlgOpen = (ui.overlay.style.display === "flex" && state.convo.npcId === it.id);
+    const isTalking = dlgOpen;
+
+    if(isTalking && !ZURIEL._wasTalking){
+      ZURIEL._talkStartT = state.t;
+    }
+    ZURIEL._wasTalking = isTalking;
+
+    // shadow
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(it.x, it.y + 20, 16, 9, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    if(ZURIEL.ready){
+      buildZurielCache();
+
+      const size = ZURIEL.size;
+      const dx = Math.floor(it.x - size/2);
+      const dy = Math.floor(it.y - size/2);
+
+      let img = null;
+
+      if(isTalking){
+        const fps = ZURIEL.talk.fps;
+        const t = Math.max(0, (state.t - (ZURIEL._talkStartT||0)));
+
+        const introCount = 4;      // 1..4 once
+        const loopFrom   = 4;      // 4..9 loop
+        const loopTo     = ZURIEL.talk.count;
+        const introDur   = introCount / fps;
+
+        let idx = 1;
+
+        if(t < introDur){
+          idx = 1 + Math.min(introCount-1, Math.floor(t * fps));
+        }else{
+          const loopCount = Math.max(1, (loopTo - loopFrom + 1));
+          idx = loopFrom + (Math.floor((t - introDur) * fps) % loopCount);
+        }
+
+        const cached = ZURIEL.cache.talk;
+        img = cached[idx] || cached[loopFrom] || cached[1] || ZURIEL.talk.frames[idx] || ZURIEL.talk.frames[1];
+      }else{
+        const idx = 1 + (Math.floor(state.t * ZURIEL.idle.fps) % ZURIEL.idle.count);
+        const cached = ZURIEL.cache.idle;
+        img = cached[idx] || cached[1] || ZURIEL.idle.frames[idx] || ZURIEL.idle.frames[1];
+      }
+
+      if(img){
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        try{ ctx.drawImage(img, dx, dy); }catch(_){}
+        ctx.restore();
+      }else{
+        // fallback if sprites didn't actually load (wrong path / missing files)
+        ctx.save();
+        ctx.fillStyle = "rgba(215,255,227,.95)";
+        ctx.beginPath(); ctx.arc(it.x, it.y, 12, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+      return;
+    }
+
+    // fallback while loading
+    ctx.save();
+    ctx.fillStyle = "rgba(215,255,227,.85)";
+    ctx.beginPath(); ctx.arc(it.x, it.y, 12, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // ============
+  // Enoch (NPC #12) sprite — idle 1-5 loop, talk 1-9 loop while dialogue open
+  // Uses same 56x56 downscale cache style as Zuriel/Naamriel
+  // ============
+  const ENOCH = {
+    ready:false,
+    idle:{ frames:[null], count:5, fps:6 },
+    talk:{ frames:[null], count:9, fps:10 },
+    loaded:0,
+    total:5+9,
+    size:56,
+    cache:{ idle:[], talk:[] },
+    _cacheBuilt:false
+  };
+
+  (function preloadEnoch(){
+    function loadSet(store, base, count){
+      for(let i=1;i<=count;i++){
+        const img = new Image();
+        img.src = base + i + ".png";
+        img.onload = img.onerror = () => {
+          ENOCH.loaded++;
+          if(ENOCH.loaded >= ENOCH.total) ENOCH.ready = true;
+        };
+        store.frames[i] = img;
+      }
+    }
+    loadSet(ENOCH.idle, "assets/npc/enoch/idle/", ENOCH.idle.count);
+    loadSet(ENOCH.talk, "assets/npc/enoch/talk/", ENOCH.talk.count);
+  })();
+
+  function buildEnochCache(){
+    if(!ENOCH.ready || ENOCH._cacheBuilt) return;
+    const makeScaled = (img) => {
+      const c = document.createElement("canvas");
+      c.width = ENOCH.size;
+      c.height = ENOCH.size;
+      const cctx = c.getContext("2d");
+      cctx.imageSmoothingEnabled = false;
+      cctx.clearRect(0,0,c.width,c.height);
+      try{ cctx.drawImage(img, 0, 0, c.width, c.height); }catch(_){}
+      return c;
+    };
+    for(let i=1;i<=ENOCH.idle.count;i++) ENOCH.cache.idle[i] = makeScaled(ENOCH.idle.frames[i]);
+    for(let i=1;i<=ENOCH.talk.count;i++) ENOCH.cache.talk[i] = makeScaled(ENOCH.talk.frames[i]);
+    ENOCH._cacheBuilt = true;
+  }
+
+  // ============
+// NPC #29 — Shamash-nasir sprites (56x56 cached)
+// ============
+const NASIR = {
+  ready:false,
+  idle:{ frames:{}, count:9, fps:9 },
+  talk:{ frames:{}, count:10, fps:12 },
+  loaded:0,
+  total:9+10,
+  size:56,
+  cache:{ idle:[], talk:[] },
+  _cacheBuilt:false
+};
+
+(function preloadNasir(){
+  function loadSet(store, base, count){
+    for(let i=1;i<=count;i++){
+      const img = new Image();
+      img.src = base + i + ".png";
+      img.onload = img.onerror = () => {
+        NASIR.loaded++;
+        if(NASIR.loaded >= NASIR.total) NASIR.ready = true;
+      };
+      store[i] = img;
+    }
+  }
+  loadSet(NASIR.idle.frames, "assets/npc/nasir/idle/", NASIR.idle.count);
+  loadSet(NASIR.talk.frames, "assets/npc/nasir/talking/", NASIR.talk.count);
+})();
+
+function buildNasirCache(){
+  if(NASIR._cacheBuilt || !NASIR.ready) return;
+  const makeScaled = (img) => {
+    const c = document.createElement("canvas");
+    c.width = NASIR.size;
+    c.height = NASIR.size;
+    const cctx = c.getContext("2d");
+    cctx.imageSmoothingEnabled = false;
+    cctx.clearRect(0,0,c.width,c.height);
+    try{ cctx.drawImage(img, 0, 0, c.width, c.height); }catch(_){}
+    return c;
+  };
+  for(let i=1;i<=NASIR.idle.count;i++) NASIR.cache.idle[i] = makeScaled(NASIR.idle.frames[i]);
+  for(let i=1;i<=NASIR.talk.count;i++) NASIR.cache.talk[i] = makeScaled(NASIR.talk.frames[i]);
+  NASIR._cacheBuilt = true;
+}
+
+function drawNasir(it){
+  const s = _ws(it);
+  const dlgOpen = (ui.overlay.style.display === "flex" && state.convo.npcId === it.id);
+  const isTalking = dlgOpen;
+
+  // shadow
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.ellipse(it.x, it.y + 20, 16, 9, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  if(NASIR.ready){
+    buildNasirCache();
+
+    const now = performance.now();
+    const set = isTalking ? NASIR.talk : NASIR.idle;
+    const cached = isTalking ? NASIR.cache.talk : NASIR.cache.idle;
+
+    const frame = 1 + Math.floor(((now/1000) * set.fps) % set.count);
+    const img = cached[frame] || cached[1] || set.frames[1];
+
+    const size = NASIR.size;
+    const dx = Math.floor(it.x - size/2);
+    const dy = Math.floor(it.y - size/2);
+
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.imageSmoothingEnabled = false;
+
+    // flip based on movement direction
+    if((s.vx||0) < -1){
+      ctx.translate(dx + size, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, size, size);
+    }else{
+      ctx.drawImage(img, dx, dy, size, size);
+    }
+    ctx.restore();
+    return;
+  }
+
+  // fallback glyph
+  ctx.save();
+  ctx.globalAlpha = 0.95;
+  ctx.strokeStyle = "rgba(220,200,160,.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(it.x, it.y+2, 6, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+
+// ============
+// NPC #11 — Kur-Duggal (Troll Chieftain) sprites (56x56 cached)
+// ============
+const TROLLCHIEF = {
+  ready:false,
+  idle:{ frames:{}, count:12, fps:8 },
+  talk:{ frames:{}, count:8, fps:10 },
+  loaded:0,
+  total:12+8,
+  size:56,
+  cache:{ idle:[], talk:[] },
+  _cacheBuilt:false
+};
+
+(function preloadTrollChief(){
+  const onDone = ()=>{
+    TROLLCHIEF.loaded++;
+    if(TROLLCHIEF.loaded >= TROLLCHIEF.total) TROLLCHIEF.ready = true;
+  };
+  const loadSet = (store, base, count)=>{
+    for(let i=1;i<=count;i++){
+      const img = new Image();
+      img.src = base + i + ".png";
+      img.onload = onDone;
+      img.onerror = ()=>{
+        onDone();
+        try{ console.warn("[TROLLCHIEF] Missing sprite:", img.src); }catch(_){ }
+      };
+      store[i] = img;
+    }
+  };
+  loadSet(TROLLCHIEF.idle.frames, "assets/npc/trollchief/idle/", TROLLCHIEF.idle.count);
+  loadSet(TROLLCHIEF.talk.frames, "assets/npc/trollchief/talking/", TROLLCHIEF.talk.count);
+})();
+
+function buildTrollChiefCache(){
+  if(TROLLCHIEF._cacheBuilt || !TROLLCHIEF.ready) return;
+  const makeScaled = (img) => {
+    const c = document.createElement("canvas");
+    c.width = TROLLCHIEF.size;
+    c.height = TROLLCHIEF.size;
+    const cctx = c.getContext("2d");
+    cctx.imageSmoothingEnabled = false;
+    cctx.clearRect(0,0,c.width,c.height);
+    try { cctx.drawImage(img, 0, 0, c.width, c.height); } catch(_){ }
+    return c;
+  };
+  for(let i=1;i<=TROLLCHIEF.idle.count;i++) TROLLCHIEF.cache.idle[i] = makeScaled(TROLLCHIEF.idle.frames[i]);
+  for(let i=1;i<=TROLLCHIEF.talk.count;i++) TROLLCHIEF.cache.talk[i] = makeScaled(TROLLCHIEF.talk.frames[i]);
+  TROLLCHIEF._cacheBuilt = true;
+}
+
+function drawTrollChief(it){
+  const dlgOpen = (ui.overlay.style.display === "flex" && state.convo.npcId === it.id);
+  const isTalking = dlgOpen;
+
+  // shadow
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.ellipse(it.x, it.y + 20, 16, 9, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  if(TROLLCHIEF.ready){
+    buildTrollChiefCache();
+    const size = TROLLCHIEF.size;
+    const dx = Math.floor(it.x - size/2);
+    const dy = Math.floor(it.y - size/2);
+
+    let img = null;
+    if(isTalking){
+      const idx = 1 + (Math.floor(state.t * TROLLCHIEF.talk.fps) % TROLLCHIEF.talk.count);
+      const cached = TROLLCHIEF.cache.talk;
+      img = cached[idx] || cached[1] || TROLLCHIEF.talk.frames[idx] || TROLLCHIEF.talk.frames[1];
+    }else{
+      const idx = 1 + (Math.floor(state.t * TROLLCHIEF.idle.fps) % TROLLCHIEF.idle.count);
+      const cached = TROLLCHIEF.cache.idle;
+      img = cached[idx] || cached[1] || TROLLCHIEF.idle.frames[idx] || TROLLCHIEF.idle.frames[1];
+    }
+
+    if(img){
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      try{ ctx.drawImage(img, dx, dy); }catch(_){ }
+      ctx.restore();
+      return;
+    }
+  }
+
+  // fallback glyph while loading or if missing
+  ctx.save();
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = "rgba(140,120,90,.9)";
+  ctx.beginPath();
+  ctx.arc(it.x, it.y+2, 8, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawEnoch(it){
+    const s = _ws(it);
+    const dlgOpen = (ui.overlay.style.display === "flex" && state.convo.npcId === it.id);
+    const isTalking = dlgOpen;
+
+    // shadow
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(it.x, it.y + 20, 16, 9, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    if(ENOCH.ready){
+      buildEnochCache();
+
+      let frame = 1;
+      if(isTalking){
+        const fps = ENOCH.talk.fps;
+        frame = 1 + (Math.floor(state.t * fps) % ENOCH.talk.count); // 1..9
+      }else{
+        const fps = ENOCH.idle.fps;
+        frame = 1 + (Math.floor(state.t * fps) % ENOCH.idle.count); // 1..5
+      }
+
+      const cached = isTalking ? ENOCH.cache.talk : ENOCH.cache.idle;
+      const img = cached[frame] || cached[1] || ENOCH.idle.frames[1];
+
+      const size = ENOCH.size;
+      const dx = Math.floor(it.x - size/2);
+      const dy = Math.floor(it.y - size/2);
+
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = false;
+
+      if((s.vx||0) < -1){
+        ctx.translate(dx + size, dy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0, size, size);
+      }else{
+        ctx.drawImage(img, dx, dy, size, size);
+      }
+      ctx.restore();
+      return;
+    }
+
+    // fallback glyph
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.strokeStyle = "rgba(170,220,255,.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(it.x, it.y+2, 6, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+;
+
+  function buildNaamrielCache(){
+    if(NAAMRIEL._cacheBuilt) return;
+    if(!NAAMRIEL.ready) return;
+
+    const makeScaled = (img) => {
+      if(!img) return null;
+      const c = document.createElement("canvas");
+      c.width = NAAMRIEL.size;
+      c.height = NAAMRIEL.size;
+      const cctx = c.getContext("2d");
+      cctx.imageSmoothingEnabled = false;
+      cctx.clearRect(0,0,c.width,c.height);
+      try { cctx.drawImage(img, 0, 0, c.width, c.height); } catch(_) {}
+      return c;
+    };
+
+    for(let i=1;i<=NAAMRIEL.walk.count;i++) NAAMRIEL.cache.walk[i] = makeScaled(NAAMRIEL.walk.frames[i]);
+    for(let i=1;i<=NAAMRIEL.talk.count;i++) NAAMRIEL.cache.talk[i] = makeScaled(NAAMRIEL.talk.frames[i]);
+    NAAMRIEL._cacheBuilt = true;
+  }
+
+  function drawWitch(it){
+    const s = _ws(it);
+    const moving = Math.hypot(s.vx||0, s.vy||0) > 2;
+    const isTalking = (ui.overlay.style.display === "flex" && state.convo.npcId === it.id);
+
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(it.x, it.y + 20, 16, 9, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    if(NAAMRIEL.ready){
+      buildNaamrielCache();
+
+      const pack = isTalking ? NAAMRIEL.talk : NAAMRIEL.walk;
+      const fps = isTalking ? NAAMRIEL.talk.fps : NAAMRIEL.walk.fps;
+
+      let idx = NAAMRIEL.idleFrame || 1;
+      if(isTalking) idx = 1 + (Math.floor(state.t * fps) % pack.count);
+      else if(moving) idx = 1 + (Math.floor(state.t * fps) % pack.count);
+
+      const cached = isTalking ? NAAMRIEL.cache.talk : NAAMRIEL.cache.walk;
+      const img = cached[idx] || cached[1] || pack.frames[idx] || pack.frames[1] || NAAMRIEL.walk.frames[1];
+
+      const size = NAAMRIEL.size;
+      const dx = Math.floor(it.x - size/2);
+      const dy = Math.floor(it.y - size/2);
+
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = false;
+
+      if((s.vx||0) < -1){
+        ctx.translate(dx + size, dy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0, size, size);
+      }else{
+        ctx.drawImage(img, dx, dy, size, size);
+      }
+      ctx.restore();
+      return;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "rgba(180,120,255,.95)";
+    ctx.beginPath(); ctx.arc(it.x, it.y, 12, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "rgba(20,20,30,.85)";
+    ctx.beginPath();
+    ctx.moveTo(it.x-10, it.y-4);
+    ctx.lineTo(it.x+10, it.y-4);
+    ctx.lineTo(it.x, it.y-26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = "rgba(160,255,255,.9)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(it.x, it.y+2, 6, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function nearestInteractable(){
+    const p = state.player;
+    let best = null;
+    for(const it of interactables){
+      const d = Math.hypot(it.x - p.x, it.y - p.y);
+      if(d <= it.r + 18){
+        if(!best || d < best.d) best = { it, d };
+      }
+    }
+    return best;
+  }
+
+  function doInteract(it){
+    if(!it) return;
+
+    if(it.kind === "checkpoint"){
+      toast(it.title, it.text + ` <span class="k">Saved</span>`);
+      state.cam.shakeT = 0.14;
+      saveGame();
+      return;
+    }
+
+    if(it.kind === "text"){
+      openDialog(it.title);
+      beginDialogueZoom(null);
+      addLine("SYSTEM", it.text);
+      setDialogControls({ mode:"script", buttons:[{label:"Close", onClick: closeDialog}] });
+      return;
+    }
+
+    if(it.kind === "npc"){
+      // ✅ Main Story quest talk hook (advances objective progress when you speak)
+      QuestUI.onTalkSlot(it.devSlot);
+
+      // ✅ NPC #19 (Zuriel) — scripted lore dialogue + Level Up option inside the dialogue
+      if(it.devSlot === 19){
+        openDialog(it.title || "Zuriel");
+        state.convo.npcId = it.id;
+        beginDialogueZoom(it.id);
+        ui.dlgWho.textContent = "Zuriel, Tablet‑Keeper of the Floodline";
+        ui.dlgLog.innerHTML = "";
+        DialogueRunner.start("root", "ZURIEL");
+        return;
+      }
+
+
+// ✅ NPC #12 (Enoch) — scripted main-story guidance + lore
+if(it.devSlot === 12){
+  openDialog("Enoch");
+  state.convo.npcId = it.id;
+  beginDialogueZoom(it.id);
+  ui.dlgWho.textContent = "Enoch";
+  ui.dlgLog.innerHTML = "";
+  try{
+    DialogueRunner.start("root", "ENOCH");
+  }catch(_){
+    addLine("Enoch", "…The grove has released you. Now, listen.");
+    setDialogControls({ mode:"chat" });
+  }
+  return;
+}
+
+
+// ✅ NPC #11 (Kur-Duggal) — Troll Chieftain at the Bonefires
+if(it.devSlot === 11){
+  openDialog("Kur-Duggal");
+  state.convo.npcId = it.id;
+  beginDialogueZoom(it.id);
+  ui.dlgWho.textContent = "Kur-Duggal";
+  ui.dlgLog.innerHTML = "";
+  try{
+    DialogueRunner.start("root", "TROLLCHIEF");
+  }catch(_){
+    addLine("Kur-Duggal", "You stand in the smoke of my fires. Speak, small-walker.");
+    setDialogControls({ mode:"chat" });
+  }
+  return;
+}
+
+// ✅ NPC #29 (Shamash-nasir) — Hunter questgiver + wilderness lore
+if(it.devSlot === 29){
+  openDialog("Shamash-nasir");
+  state.convo.npcId = it.id;
+  beginDialogueZoom(it.id);
+  ui.dlgWho.textContent = "Shamash-nasir";
+  ui.dlgLog.innerHTML = "";
+  try{
+    DialogueRunner.start("root", "HUNTER");
+  }catch(_){
+    addLine("Shamash-nasir", "If you want work, ask for it. If you want stories, sit down.");
+    setDialogControls({ mode:"chat" });
+  }
+  return;
+}
+
+      openDialog(it.title);
+      state.convo.npcId = it.id;
+      beginDialogueZoom(it.id);
+
+      if(it.devSlot === 28){
+        ui.dlgWho.textContent = "Na’amriel the Ash-Bound";
+        ui.dlgLog.innerHTML = "";
+        DialogueRunner.start("first_meeting", "NAAMRIEL");
+        return;
+      }
+
+setDialogControls({ mode:"chat" });
+      addLine(it.title, it.lines[Math.floor(Math.random()*it.lines.length)]);
+      return;
+    }
+  }
+
+  // ============
+  // Minimap
+  // ============
+  let miniTimer = 0;
+  let miniNeedsRedraw = false;
+
+  function toggleMinimap(){
+    state.mini.enabled = !state.mini.enabled;
+    ui.miniWrap.style.display = state.mini.enabled ? "block" : "none";
+    miniTimer = 0;
+    miniNeedsRedraw = true;
+  }
+
+
+  // ============
+  // Explore Map (fog-of-war) + Lore (lightweight)
+  // ============
+  const Explore = (() => {
+    let key = null;
+    let cell = 32;
+    let gw = 0, gh = 0;
+    let data = null; // Uint8Array
+    let dirty = false;
+    let saveT = 0;
+
+    function slotSuffix(){
+      const parts = String(CFG.saveKey || "").split("__");
+      return parts[1] || "slot1";
+    }
+    function resolveKey(){ return "level1_explore_v1__" + slotSuffix(); }
+
+    function init(worldW, worldH){
+      key = resolveKey();
+      gw = Math.max(8, Math.ceil(worldW / cell));
+      gh = Math.max(8, Math.ceil(worldH / cell));
+      const want = gw * gh;
+
+      try{
+        const raw = localStorage.getItem(key);
+        if(raw){
+          const obj = JSON.parse(raw);
+          if(obj && obj.gw === gw && obj.gh === gh && typeof obj.b64 === "string"){
+            const bin = atob(obj.b64);
+            const arr = new Uint8Array(bin.length);
+            for(let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+            if(arr.length === want){
+              data = arr;
+              return;
+            }
+          }
+        }
+      }catch(_){}
+
+      data = new Uint8Array(want);
+      dirty = true;
+    }
+
+    function markAt(x, y, radiusCells=2){
+      if(!data) return;
+      const cx = Math.max(0, Math.min(gw-1, Math.floor(x / cell)));
+      const cy = Math.max(0, Math.min(gh-1, Math.floor(y / cell)));
+      for(let yy=cy-radiusCells; yy<=cy+radiusCells; yy++){
+        if(yy<0||yy>=gh) continue;
+        for(let xx=cx-radiusCells; xx<=cx+radiusCells; xx++){
+          if(xx<0||xx>=gw) continue;
+          const i = yy*gw + xx;
+          if(data[i] !== 1){
+            data[i] = 1;
+            dirty = true;
+          }
+        }
+      }
+    }
+
+    function percent(){
+      if(!data) return 0;
+      let on = 0;
+      for(let i=0;i<data.length;i++) if(data[i]===1) on++;
+      return (on / data.length) * 100;
+    }
+
+    function save(force=false){
+      if(!data || !key) return;
+      if(!dirty && !force) return;
+      dirty = false;
+      try{
+        let s = "";
+        for(let i=0;i<data.length;i++) s += String.fromCharCode(data[i]);
+        const obj = { gw, gh, cell, b64: btoa(s), ts: Date.now() };
+        localStorage.setItem(key, JSON.stringify(obj));
+      }catch(_){}
+    }
+
+    function step(dt){
+      saveT += dt;
+      if(saveT >= 1.25){
+        saveT = 0;
+        save(false);
+      }
+    }
+
+    function drawExploredCells(drawRect){
+      // drawRect(cellX, cellY, wCells, hCells)
+      if(!data) return;
+      for(let y=0;y<gh;y++){
+        for(let x=0;x<gw;x++){
+          if(data[y*gw+x]===1) drawRect(x,y,1,1);
+        }
+      }
+    }
+
+    function grid(){ return { gw, gh, cell }; }
+
+    return { init, markAt, percent, save, step, drawExploredCells, grid };
+  })();
+
+  const Lore = (() => {
+    let key = null;
+    let entries = [];
+
+    function slotSuffix(){
+      const parts = String(CFG.saveKey || "").split("__");
+      return parts[1] || "slot1";
+    }
+    function resolveKey(){ return "level1_lore_v1__" + slotSuffix(); }
+
+    function load(){
+      key = resolveKey();
+      try{
+        const raw = localStorage.getItem(key);
+        if(raw){
+          const obj = JSON.parse(raw);
+          if(obj && Array.isArray(obj.entries)) entries = obj.entries;
+        }
+      }catch(_){}
+      if(!Array.isArray(entries)) entries = [];
+    }
+
+    function save(){
+      try{ localStorage.setItem(key, JSON.stringify({ entries, ts: Date.now() })); }catch(_){}
+    }
+
+    function unlock(id, title, body){
+      if(!id) return;
+      if(entries.some(e=>e && e.id===id)) return;
+      entries.unshift({ id:String(id), title:String(title||id), body:String(body||""), ts:Date.now() });
+      save();
+    }
+
+    function list(limit=60){ return entries.slice(0, limit); }
+
+    return { load, unlock, list };
+  })();
+
+  // ============
+  // Pause Menu
+  // ============
+  const PauseMenu = (() => {
+    const root = ()=>document.getElementById("pauseOverlay");
+    const pane = ()=>document.getElementById("pausePane");
+
+    let open = false;
+    let tab = "stats";
+    let prevTab = "stats";
+
+    function isOpen(){ return open; }
+
+    function setTab(next){
+      // remember where we came from so Map can act like a "subscreen"
+      if(next === "map" && tab !== "map") prevTab = tab;
+      if(next !== "map") prevTab = next;
+      tab = next;
+      document.querySelectorAll("#pauseNav .pNavBtn[data-tab]").forEach(b=>{
+        b.classList.toggle("active", b.dataset.tab === tab);
+      });
+      render(true);
+    }
+
+    function openMenu(){
+      if(open) return;
+      open = true;
+      const r = root();
+      if(r){ r.style.display="flex"; r.setAttribute("aria-hidden","false"); }
+      try{ keys.clear(); }catch(_){}
+      render(true);
+    }
+
+    function closeMenu(){
+      if(!open) return;
+      open = false;
+      const r = root();
+      if(r){ r.style.display="none"; r.setAttribute("aria-hidden","true"); }
+      try{ Explore.save(true); }catch(_){}
+    }
+
+    function toggle(){ open ? closeMenu() : openMenu(); }
+
+    function meta(){
+      try{
+        const dbg = window.Progression?._debug?.();
+        const P = dbg?.P || {};
+        const c = localStorage.getItem("selectedCharacter") || "Adventurer";
+        document.getElementById("pmChar").textContent = c;
+        document.getElementById("pmLevel").textContent = String(P.level ?? 1);
+        document.getElementById("pmXP").textContent = String(P.xp ?? 0);
+        document.getElementById("pmSP").textContent = String(P.sp ?? P.skillPoints ?? 0);
+      }catch(_){}
+    }
+
+    function set(html){
+      const p = pane(); if(p) p.innerHTML = html;
+    }
+
+    function renderStats(){
+      const dbg = window.Progression?._debug?.();
+      const P = dbg?.P || {};
+      set(`
+        <div class="pH1">Character</div>
+        <div class="pGrid">
+          <div class="pCard">
+            <div class="pRow"><span class="pTag">Level</span><b>${P.level ?? 1}</b></div>
+            <div class="pRow" style="margin-top:8px"><span class="pTag">XP</span><b>${P.xp ?? 0}</b></div>
+            <div class="pRow" style="margin-top:8px"><span class="pTag">Skill Points</span><b>${P.sp ?? P.skillPoints ?? 0}</b></div>
+            <div style="margin-top:10px;color:var(--muted);font-size:12px;line-height:1.35">
+              Spend points at trainers. Deeper tiers unlock the new attacks.
+            </div>
+          </div>
+          <div class="pCard">
+            <div class="pRow"><span class="pTag">Health</span><b>${Math.round(state.player.hp||0)}</b> / <b>${Math.round(state.player.maxHp||0)}</b></div>
+            <div class="pRow" style="margin-top:8px"><span class="pTag">Position</span><b>${Math.round(state.player.x)}, ${Math.round(state.player.y)}</b></div>
+            <div class="pRow" style="margin-top:8px"><span class="pTag">Zone</span><b>${state.zoneId || "—"}</b></div>
+          </div>
+        </div>
+      `);
+    }
+
+    function renderQuests(){
+      let q=null, journal=[];
+      try{
+        q = window.MainStoryQuestSystem?.getActiveQuest?.() || null;
+        journal = window.MainStoryQuestSystem?.getJournal?.(24) || [];
+      }catch(_){}
+      const objLis = (q?.objectives||[]).map(o=>{
+        const done = !!o.isComplete;
+        const need = (typeof o.count==="number")?o.count:1;
+        const have = (typeof o.progress==="number")?o.progress:0;
+        const prog = (need>1)?` (${Math.min(have,need)}/${need})`:"";
+        return `<li style="${done?'opacity:.65;text-decoration:line-through;':''}">${(o.text||o.type||"Objective") + prog}</li>`;
+      }).join("");
+      const jLis = journal.map(j=>`<li><span style="opacity:.7">${new Date(j.ts||Date.now()).toLocaleString()}</span> — ${String(j.text||"")}</li>`).join("");
+      set(`
+        <div class="pH1">Quests</div>
+        <div class="pCard">
+          <div class="pRow"><span class="pTag">Active</span><b>${q ? (q.title||"Quest") : "—"}</b></div>
+          <div style="margin-top:10px"><ul class="pList">${objLis || "<li>—</li>"}</ul></div>
+        </div>
+        <div class="pCard">
+          <div class="pRow"><span class="pTag">Journal</span><b>Recent</b></div>
+          <div style="margin-top:10px;max-height:260px;overflow:auto">
+            <ul class="pList">${jLis || "<li>—</li>"}</ul>
+          </div>
+        </div>
+      `);
+    }
+
+    function renderMap(){
+      const pct = Explore.percent().toFixed(1);
+      set(`
+        <div class="pRow" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div class="pH1" style="margin:0">Map</div>
+          <button id="pmMapBack" class="pBtn" title="Back">Back</button>
+        </div>
+        <div id="pauseMapWrap" class="pCard">
+          <canvas id="pauseMap" width="960" height="540"></canvas>
+          <div class="pRow">
+            <span class="pTag">Explored</span><b>${pct}%</b>
+            <span class="pTag">Tip</span><span style="color:var(--muted);font-size:12px">Walk to reveal new areas.</span>
+          </div>
+        </div>
+      `);
+
+      const c = document.getElementById("pauseMap");
+      if(!c) return;
+
+      const backBtn = document.getElementById("pmMapBack");
+      if(backBtn){
+        backBtn.onclick = ()=> setTab(prevTab || "quests");
+      }
+      // Clicking the map returns to the previous tab (Skyrim-ish)
+      c.style.cursor = "pointer";
+      c.addEventListener("click", ()=> setTab(prevTab || "quests"));
+
+      const ctx = c.getContext("2d");
+      const w = c.width, h = c.height;
+
+      ctx.clearRect(0,0,w,h);
+      try{
+        if(mapSource) ctx.drawImage(mapSource, 0,0, w,h);
+        else{
+          ctx.fillStyle="rgba(0,0,0,.22)";
+          ctx.fillRect(0,0,w,h);
+          ctx.fillStyle="rgba(255,255,255,.25)";
+          ctx.fillText("Map not ready.", 12, 24);
+        }
+      }catch(_){}
+
+      // fog
+      const mw = state.world.w || w;
+      const mh = state.world.h || h;
+      const sx = w / mw;
+      const sy = h / mh;
+
+      ctx.save();
+      ctx.fillStyle="rgba(0,0,0,.85)";
+      ctx.fillRect(0,0,w,h);
+      ctx.globalCompositeOperation="destination-out";
+
+      const g = Explore.grid();
+      Explore.drawExploredCells((cx,cy,ww,hh)=>{
+        const x = (cx * g.cell) * sx;
+        const y = (cy * g.cell) * sy;
+        ctx.fillRect(x, y, (ww*g.cell)*sx + 1, (hh*g.cell)*sy + 1);
+      });
+
+      ctx.restore();
+
+      // player marker
+      ctx.save();
+      ctx.fillStyle="rgba(109,255,149,.95)";
+      ctx.beginPath();
+      ctx.arc(state.player.x * sx, state.player.y * sy, 4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function renderLore(){
+      const entries = Lore.list(60);
+      const cards = entries.map(e=>`
+        <div class="pCard">
+          <div class="pRow"><span class="pTag">Lore</span><b>${e.title}</b></div>
+          <div style="margin-top:8px;color:var(--muted);font-size:12px;line-height:1.4">${e.body || ""}</div>
+        </div>
+      `).join("");
+      set(`
+        <div class="pH1">Lore</div>
+        ${cards || `<div class="pCard" style="color:var(--muted);font-size:12px;line-height:1.4">Explore zones to unlock lore entries.</div>`}
+      `);
+    }
+
+    function renderSettings(){
+      const checked = (v)=> v ? "checked" : "";
+      set(`
+        <div class="pH1">Settings</div>
+        <div class="pCard">
+          <div class="pRow">
+            <label class="pRow" style="gap:8px;cursor:pointer">
+              <input type="checkbox" id="setVig" ${checked(!!CFG.enableVignette)} />
+              <b>Vignette</b>
+            </label>
+            <label class="pRow" style="gap:8px;cursor:pointer">
+              <input type="checkbox" id="setMini" ${checked(!!(devData && devData.minimap))} />
+              <b>Minimap</b>
+            </label>
+          </div>
+          <div style="margin-top:10px;color:var(--muted);font-size:12px;line-height:1.35">
+            Want full Skyrim-style options (audio, graphics, keybinds)? We can expand this tab next.
+          </div>
+        </div>
+      `);
+      const vig = document.getElementById("setVig");
+      const mini = document.getElementById("setMini");
+      if(vig) vig.onchange = ()=>{ CFG.enableVignette = !!vig.checked; };
+      if(mini) mini.onchange = ()=>{ devData.minimap = !!mini.checked; trySaveDev(); renderMinimap(); };
+    }
+
+    function render(force=false){
+      meta();
+      if(!open) return;
+      if(tab==="stats") renderStats();
+      else if(tab==="quests") renderQuests();
+      else if(tab==="map") renderMap();
+      else if(tab==="lore") renderLore();
+      else if(tab==="settings") renderSettings();
+    }
+
+    function handleNavKeys(e){
+      if(!open) return false;
+      const btns = Array.from(document.querySelectorAll("#pauseNav .pNavBtn[data-tab]"));
+      const i = btns.findIndex(b=>b.classList.contains("active"));
+      if(e.code==="KeyW" || e.code==="ArrowUp"){
+        const ni = Math.max(0, i-1);
+        if(btns[ni]) setTab(btns[ni].dataset.tab);
+        return true;
+      }
+      if(e.code==="KeyS" || e.code==="ArrowDown"){
+        const ni = Math.min(btns.length-1, i+1);
+        if(btns[ni]) setTab(btns[ni].dataset.tab);
+        return true;
+      }
+      if(e.code==="Enter"){
+        render(true);
+        return true;
+      }
+      return false;
+    }
+
+    function bind(){
+      const r = root();
+      if(r){
+        r.addEventListener("click", (e)=>{ if(e.target === r) closeMenu(); });
+      }
+      document.getElementById("pauseClose")?.addEventListener("click", closeMenu);
+
+      document.getElementById("pauseNav")?.addEventListener("click", (e)=>{
+        const b = e.target.closest("button");
+        if(!b) return;
+        if(b.dataset.tab) setTab(b.dataset.tab);
+        if(b.dataset.act === "save"){
+          try{ save(); toast("Saved", "Game saved."); }catch(_){}
+        }
+        if(b.dataset.act === "toLauncher"){
+          try{ Explore.save(true); }catch(_){}
+          location.href = "launcher_v3.html";
+        }
+      });
+    }
+
+    return { bind, toggle, openMenu, closeMenu, isOpen, setTab, render, handleNavKeys };
+  })();
+
+  // ============
+  // Input
+  // ============
+  const keys = new Map();
+  function isDown(code){ return keys.get(code) === true; }
+
+  window.addEventListener("keydown", (e)=>{
+    keys.set(e.code, true);
+    if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
+
+    // ✅ forward to Combat (handles G + Space etc)
+    try{ if(window.Combat && typeof Combat.onKeyDown === "function") Combat.onKeyDown(e); }catch(_){}
+
+    if(e.code === "KeyM") toggleMinimap();
+    if(e.code === "Escape"){
+      if(ui.overlay.style.display === "flex") closeDialog();
+      else if(ui.cutsceneOverlay && ui.cutsceneOverlay.style.display === "flex") { /* ignore */ }
+      else { e.preventDefault(); PauseMenu.toggle(); }
+    }
+
+    if(e.code === "KeyK"){
+      const ne = EnemySystem.nearestEnemy(80);
+      if(ne) EnemySystem.killEnemy(ne);
+      else toast("No enemy nearby", "Walk closer to an enemy, then press <span class='k'>K</span>.");
+    }
+
+    if(e.code === "KeyI"){
+      openDialog("Inventory");
+      addLine("SYSTEM", "Items (saved to localStorage):");
+      for(const line of invToLines(140)) addLine("INV", line);
+    }
+
+    if(e.code === "KeyJ"){
+      QuestUI.openJournal();
+    }
+  }, {passive:false});
+
+  window.addEventListener("keyup", (e)=>{
+    keys.set(e.code,false);
+    try{ if(window.Combat && typeof Combat.onKeyUp === "function") Combat.onKeyUp(e); }catch(_){}
+  }, {passive:true});
+
+  // ✅ mouse (LMB sword) + ensure mouse world is up-to-date at click time
+  canvas.addEventListener("mousedown", (e)=>{
+    if(e.button !== 0) return; // left click only
+    if(ui.overlay.style.display === "flex") return; // no attacks in dialogue
+
+    updateMouseWorldFromClient(e.clientX, e.clientY);
+
+    try{ if(window.Combat && typeof Combat.onMouseDown === "function") Combat.onMouseDown(e); }catch(_){}
+  }, {passive:true});
+
+  // ============
+  // Movement
+  // ============
+  function movementUpdate(dt){
+    const p = state.player;
+    let ax = 0, ay = 0;
+
+    if(isDown("KeyW") || isDown("ArrowUp")) ay -= 1;
+    if(isDown("KeyS") || isDown("ArrowDown")) ay += 1;
+    if(isDown("KeyA") || isDown("ArrowLeft")) ax -= 1;
+    if(isDown("KeyD") || isDown("ArrowRight")) ax += 1;
+
+    const m = Math.hypot(ax, ay);
+    if(m > 0.001){ ax /= m; ay /= m; }
+
+    const sprint = isDown("ShiftLeft") || isDown("ShiftRight");
+    const speed = CFG.player.baseSpeed * (sprint ? CFG.player.sprintMult : 1) * (p.slowMul || 1);
+
+    const accel = CFG.player.accel;
+    const friction = CFG.player.friction;
+
+    const dvx = ax * speed;
+    const dvy = ay * speed;
+
+    const k = 1 - Math.exp(-accel * dt);
+    p.vx += (dvx - p.vx) * k;
+    p.vy += (dvy - p.vy) * k;
+
+    if(m < 0.01){
+      const fk = 1 - Math.exp(-friction * dt);
+      p.vx *= (1 - fk);
+      p.vy *= (1 - fk);
+      if(Math.abs(p.vx) < 0.02) p.vx = 0;
+      if(Math.abs(p.vy) < 0.02) p.vy = 0;
+    }
+
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+
+    if(m > 0.01){ p.faceX = ax; p.faceY = ay; }
+    ensurePlayerInBounds();
+  }
+// ============
+// Zones (rectangle + circle) + quest enter/leave hooks
+// ============
+function getZoneAt(x, y){
+  for(const z of CFG_INTERACT.zones){
+    if(!z) continue;
+    // circle zone: center x/y + radius r
+    if(typeof z.r === "number" && isFinite(z.r)){
+      const dx = x - (z.x||0);
+      const dy = y - (z.y||0);
+      if((dx*dx + dy*dy) <= (z.r*z.r)) return z;
+    }else{
+      // rectangle zone: top-left x/y + w/h
+      if(x >= (z.x||0) && y >= (z.y||0) && x <= (z.x||0) + (z.w||0) && y <= (z.y||0) + (z.h||0)) return z;
+    }
+  }
+  return null;
+}
+
+function currentZone(){
+  const z = getZoneAt(state.player.x, state.player.y);
+  return (z && z.name) ? z.name : "Unknown";
+}
+
+function currentZoneId(){
+  const z = getZoneAt(state.player.x, state.player.y);
+  return (z && z.id) ? z.id : null;
+}
+  // ============
+  // Combat: player damage (used by EnemySystem)
+  // ============
+  function damagePlayer(dmg){
+    const p = state.player;
+    if(p.hp <= 0) return;
+    p.hp = Math.max(0, p.hp - dmg);
+    p.hurtT = 0.18;
+    state.cam.shakeT = 0.12;
+    ui.hp.textContent = String(Math.round(p.hp));
+    if(p.hp <= 0) toast("You fell", "Hit <span class='k'>Reset</span> to respawn.");
+  }
+
+  // ============
+  // Enemy system init
+  // ============
+  EnemySystem.init({ CFG, state, clamp, spawnLootAt, damagePlayer });
+
+  // ✅ wrap EnemySystem.damageEnemy to apply progression damage multiplier
+  (function wrapDamageEnemy(){
+    try{
+      if(!window.EnemySystem || typeof EnemySystem.damageEnemy !== "function") return;
+      if(EnemySystem.__PROG_WRAPPED__) return;
+      const _damage = EnemySystem.damageEnemy.bind(EnemySystem);
+      EnemySystem.damageEnemy = function(e, dmg, kx, ky){
+        let mult = 1;
+        try{
+          if(window.Progression && typeof Progression.getDamageMult === "function"){
+            mult = Math.max(0.05, Number(Progression.getDamageMult()) || 1);
+          }else if(window.Progression && typeof Progression.getDamageMult !== "function" && typeof Progression.getDamageMult === "number"){
+            mult = Math.max(0.05, Number(Progression.getDamageMult) || 1);
+          }else if(window.Progression && typeof Progression.getDamageMult === "undefined" && typeof Progression.getDamageMult !== "function"){
+            // ignore
+          }
+        }catch(_){}
+        const scaled = (Number(dmg)||0) * mult;
+        return _damage(e, scaled, kx, ky);
+      };
+      EnemySystem.__PROG_WRAPPED__ = true;
+    }catch(_){}
+  })();
+
+  // ✅ init Combat after EnemySystem exists (Combat may call EnemySystem.*)
+  try{
+    if(window.Combat && typeof Combat.init === "function"){
+      Combat.init({ CFG, state, clamp, toast });
+      if(typeof Combat.setMouse === "function"){
+        Combat.setMouse(mouse);
+      }
+    }
+  }catch(_){}
+
+  // ============
+  // Camera
+  // ============
+  function cameraUpdate(dt){
+    const zK = 1 - Math.exp(-10 * dt);
+    state.cam.zoom += (state.cam.zoomTarget - state.cam.zoom) * zK;
+
+    if(Math.abs(state.cam.zoom - state.cam._lastZoom) > 0.01){
+      state.cam._lastZoom = state.cam.zoom;
+      ensureMapCacheSize();
+      refreshMapCache(true);
+    }
+
+    const w = canvas.width, h = canvas.height;
+    const zoom = getZoom();
+    const viewW = w / zoom, viewH = h / zoom;
+
+    let focusX = state.player.x;
+    let focusY = state.player.y;
+
+    if(state.cam.cineActive && state.cam.cineNpcId){
+      const npc = interactables.find(x => x && x.id === state.cam.cineNpcId);
+      if(npc){
+        focusX = (state.player.x + npc.x) * 0.5;
+        focusY = (state.player.y + npc.y) * 0.5;
+      }
+    }
+
+    let targetX = state.cam.x, targetY = state.cam.y;
+
+    if(state.cam.cineActive){
+      targetX = focusX - viewW/2;
+      targetY = focusY - viewH/2;
+    }else{
+      const dz = CFG.camera.deadzone;
+      const dzW = viewW * dz, dzH = viewH * dz;
+
+      const left = targetX + viewW/2 - dzW/2;
+      const right = targetX + viewW/2 + dzW/2;
+      const top = targetY + viewH/2 - dzH/2;
+      const bot = targetY + viewH/2 + dzH/2;
+
+      const px = state.player.x, py = state.player.y;
+      if(px < left) targetX -= (left - px);
+      if(px > right) targetX += (px - right);
+      if(py < top) targetY -= (top - py);
+      if(py > bot) targetY += (py - bot);
+    }
+
+    targetX = clamp(targetX, 0, Math.max(0, state.world.w - viewW));
+    targetY = clamp(targetY, 0, Math.max(0, state.world.h - viewH));
+
+    const k = 1 - Math.exp(-CFG.camera.lerp * dt);
+    state.cam.x += (targetX - state.cam.x) * k;
+    state.cam.y += (targetY - state.cam.y) * k;
+
+    state.cam.shakeT = Math.max(0, state.cam.shakeT - dt);
+    state.cam.shake = state.cam.shakeT > 0 ? CFG.camera.maxShake * (state.cam.shakeT / 0.18) : 0;
+  }
+
+  function cameraTransform(){
+    const zoom = getZoom();
+    const sx = Math.sin(state.t * 80) * state.cam.shake;
+    const sy = Math.cos(state.t * 90) * state.cam.shake;
+    ctx.setTransform(zoom,0,0,zoom, -Math.floor((state.cam.x - sx)*zoom), -Math.floor((state.cam.y - sy)*zoom));
+  }
+
+  // ============
+  // Rendering
+  // ============
+  function drawPickup(pk){
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.ellipse(pk.x, pk.y + pk.r + 4, pk.r*1.05, pk.r*0.62, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    const pulse = 0.55 + 0.45*Math.sin(state.t*5 + pk.x*0.01);
+    ctx.globalAlpha = 0.65;
+    ctx.strokeStyle = pickupColor(pk.rarity);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(pk.x, pk.y, pk.r + 2 + pulse*2, 0, Math.PI*2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = pickupColor(pk.rarity);
+    ctx.beginPath();
+    ctx.arc(pk.x, pk.y, pk.r*0.6, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function draw(){
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    cameraTransform();
+
+    if(mapSource && CFG.worldScale === 1){
+      ctx.drawImage(mapCache, cacheSX, cacheSY);
+    } else if(mapImg.complete && mapImg.naturalWidth > 0){
+      ctx.drawImage(mapImg, 0, 0, mapImg.naturalWidth*CFG.worldScale, mapImg.naturalHeight*CFG.worldScale);
+    } else {
+      const W = state.world.w, H = state.world.h;
+      ctx.fillStyle = "#0b1020";
+      ctx.fillRect(0,0,W,H);
+      ctx.strokeStyle = "rgba(255,255,255,.06)";
+      ctx.lineWidth = 1;
+      for(let x=0;x<W;x+=64){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+      for(let y=0;y<H;y+=64){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+      ctx.fillStyle = "rgba(255,255,255,.7)";
+      ctx.fillText("Missing level1.png — showing debug grid", 24, 42);
+    }
+
+    EnemySystem.draw(ctx);
+
+    try{ if(window.Combat && typeof Combat.draw === "function") Combat.draw(ctx); }catch(_){}
+
+    for(const pk of pickups){ drawPickup(pk); }
+    for(const it of interactables){ if(it && it.isWitch) drawWitch(it); }
+    for(const it of interactables){ if(it && (it.isZuriel || it.devSlot===19)) drawZuriel(it); }
+    for(const it of interactables){ if(it && it.isNasir) drawNasir(it); }
+    for(const it of interactables){ if(it && it.isTrollChief) drawTrollChief(it); }
+    for(const it of interactables){ if(it && it.isEnoch) drawEnoch(it); }
+
+    if(isDown("Backquote")){
+      ctx.fillStyle = "rgba(109,255,213,.12)";
+      for(const it of interactables){ ctx.beginPath(); ctx.arc(it.x,it.y,it.r,0,Math.PI*2); ctx.fill(); }
+      ctx.fillStyle = "rgba(255,255,255,.08)";
+      for(const pk of pickups){ ctx.beginPath(); ctx.arc(pk.x,pk.y,pk.r+10,0,Math.PI*2); ctx.fill(); }
+    }
+
+    for(const it of interactables){
+      const pulse = 0.6 + 0.4*Math.sin(state.t*4 + it.x*0.01);
+      const R = 6 + pulse*2;
+      ctx.save();
+      ctx.translate(it.x, it.y - 18);
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = "rgba(109,255,213,.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-R,0); ctx.lineTo(R,0);
+      ctx.moveTo(0,-R); ctx.lineTo(0,R);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ✅ PLAYER DRAW (Sprite via Combat)
+    let drew = false;
+    try{
+      if(window.Combat && typeof Combat.drawPlayer === "function"){
+        drew = Combat.drawPlayer(ctx);
+      }
+    }catch(_){}
+
+    if(!drew){
+      const p = state.player;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.ellipse(0, CFG.player.radius+4, CFG.player.radius*1.2, CFG.player.radius*0.7, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = (p.hurtT > 0) ? "rgba(255,255,255,.95)" : "rgba(215,255,227,.95)";
+      ctx.beginPath(); ctx.arc(0,0,CFG.player.radius,0,Math.PI*2); ctx.fill();
+
+      ctx.strokeStyle = "rgba(0,0,0,.55)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(p.faceX*CFG.player.radius*0.25, p.faceY*CFG.player.radius*0.25);
+      ctx.lineTo(p.faceX*CFG.player.radius*0.95, p.faceY*CFG.player.radius*0.95);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if(CFG.enableVignette){
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.drawImage(vignette, 0, 0);
+    }
+
+    if(state.mini.enabled && miniNeedsRedraw) drawMinimap();
+  }
+
+  function drawMinimap(){
+    const mctx = document.getElementById("miniC").getContext("2d");
+    mctx.setTransform(1,0,0,1,0,0);
+    mctx.clearRect(0,0,180,180);
+    mctx.imageSmoothingEnabled = false;
+
+    const W = state.world.w, H = state.world.h;
+    const s = Math.min(180 / W, 180 / H);
+
+    if(mapImg.complete && mapImg.naturalWidth>0){
+      mctx.drawImage(mapImg, 0, 0, mapImg.naturalWidth*s, mapImg.naturalHeight*s);
+    }else{
+      mctx.fillStyle = "rgba(255,255,255,.05)";
+      mctx.fillRect(0,0,180,180);
+    }
+
+    mctx.fillStyle = "rgba(109,255,213,.75)";
+    for(const it of interactables) mctx.fillRect((it.x*s)-1, (it.y*s)-1, 3, 3);
+
+    mctx.fillStyle = "rgba(255,215,120,.65)";
+    for(const pk of pickups) mctx.fillRect((pk.x*s)-1, (pk.y*s)-1, 3, 3);
+
+    mctx.fillStyle = "rgba(255,255,255,.95)";
+    mctx.beginPath();
+    mctx.arc(state.player.x*s, state.player.y*s, 3, 0, Math.PI*2);
+    mctx.fill();
+
+    miniNeedsRedraw = false;
+  }
+
+  // ============
+  // Boot assets
+  // ============
+  const mapImg = new Image();
+  BootOverlay.set('Loading map image…', 0.18, 'Reading level1.png');
+
+  mapImg.src = CFG.mapImage;
+
+  mapImg.onload = async () => {
+    ui.status.textContent = "Map loaded.";
+    BootOverlay.set("Map loaded.", 0.35, "Loading points…");
+    state.world.w = mapImg.naturalWidth * CFG.worldScale;
+    state.world.h = mapImg.naturalHeight * CFG.worldScale;
+
+    // Init exploration grid once map size is known
+    try{ Explore.init(state.world.w, state.world.h); Explore.markAt(state.player.x, state.player.y, 3); }catch(_){ }
+
+    try{ mapSource = await createImageBitmap(mapImg); }
+    catch(_){ mapSource = mapImg; }
+
+    invLoad();
+
+    if(window.PointsLoader && PointsLoader.tryLoadPointsFile){
+      BootOverlay.set("Loading points…", 0.45, "Applying spawn & enemy data");
+      const pr = await PointsLoader.tryLoadPointsFile({
+        url: CFG.pointsUrl,
+        devKey: CFG.devKey,
+        toast,
+        onApplied: (data) => {
+          devData = data;
+          rebuildInteractables();
+          EnemySystem.resetFromDev(devData);
+        }
+      });
+      if(!pr.ok && pr.mode === "blocked"){
+        toast("Points file blocked", "Browser blocked loading <span class='k'>level1.points.json</span> (file://). Using saved points from <span class='k'>localStorage</span> instead.");
+      }
+      devData = PointsLoader.loadDev(CFG.devKey);
+    }
+
+    BootOverlay.set("Loading drop table…", 0.70, "Preparing loot & enemies");
+    const d = await loadDrops();
+    ui.status.textContent = d.ok ? "Map loaded. Drops loaded." : "Map loaded. Drops: default.";
+    BootOverlay.set("Finalizing…", 0.88, "Building interactables & quest UI");
+
+    rebuildInteractables();
+    EnemySystem.resetFromDev(devData);
+
+    applySpawnPriority();
+
+    // ✅ Init quest system once (not every frame)
+    QuestUI.init();
+    try{ Lore.load(); }catch(_){ }
+    try{ PauseMenu.bind(); }catch(_){ }
+    EnemySystem.updateActivation(devData);
+
+    ensureMapCacheSize();
+    refreshMapCache(true);
+
+    BootOverlay.hide();
+  };
+
+  mapImg.onerror = () => {
+    try{ BootOverlay.error("Map missing.", `Missing ${CFG.mapImage}. Put it next to this HTML.`); }catch(_){ BootOverlay.error("Map missing.", "Missing level1.png. Put it next to this HTML."); }
+    ui.status.textContent = "Missing level1.png (put it next to this HTML)";
+    toast("Map missing", `Could not load <span class="k">${escapeHtml(CFG.mapImage)}</span>. Put it next to this HTML.`);
+  };
+
+  // ============
+  // Buttons
+  // ============
+  document.getElementById("btnReset").addEventListener("click", ()=>{
+    state.player.hp = 100;
+    ui.hp.textContent = "100";
+    applySpawnPriority();
+
+    // ✅ Init quest system once (not every frame)
+    QuestUI.init();
+    try{ Lore.load(); }catch(_){ }
+    try{ PauseMenu.bind(); }catch(_){ }
+    saveGame();
+  });
+
+  // ============
+  // Loop
+  // ============
+  let activationTimer = 0;
+  let enemyTimer = 0;
+  const ENEMY_STEP = 1/30;
+
+  function tick(now){
+    const dt = Math.min(0.05, (now - state.last) / 1000);
+    state.last = now;
+    state.t += dt;
+
+    for(let i=pickups.length-1;i>=0;i--){
+      pickups[i].life -= dt;
+      if(pickups[i].life <= 0) pickups.splice(i,1);
+    }
+
+    const dialogOpen = (ui.overlay.style.display === "flex");
+    const cutsceneOpen = (ui.cutsceneOverlay && ui.cutsceneOverlay.style.display === "flex");
+    const pauseOpen = (PauseMenu && PauseMenu.isOpen && PauseMenu.isOpen());
+
+    cameraUpdate(dt);
+
+    // periodic explore autosave
+    try{ Explore.step(dt); }catch(_){ }
+
+    if(!dialogOpen && !cutsceneOpen && !pauseOpen){
+      if(state.player.hurtT > 0) state.player.hurtT = Math.max(0, state.player.hurtT - dt);
+
+      updateNpcWander(dt);
+      movementUpdate(dt);
+
+      try{ if(window.Combat && typeof Combat.update === "function") Combat.update(dt); }catch(_){}
+
+      activationTimer -= dt;
+      if(activationTimer <= 0){
+        activationTimer = 0.35;
+        EnemySystem.updateActivation(devData);
+      }
+
+      enemyTimer += dt;
+      let steps = 0;
+      while(enemyTimer >= ENEMY_STEP && steps < 1){
+        EnemySystem.update(ENEMY_STEP);
+        enemyTimer -= ENEMY_STEP;
+        steps++;
+      }
+
+      const nearPickup = nearestPickup();
+      if(nearPickup){
+        ui.toast.style.display = "block";
+        ui.toastT.textContent = "Loot";
+        ui.toastB.innerHTML = `Press <span class="k">E</span> to pick up <span class="k">${escapeHtml(nearPickup.it.item)}</span> (<span class="k">${escapeHtml(nearPickup.it.rarity)}</span>).`;
+        if(keys.get("KeyE") === true){
+          keys.set("KeyE", false);
+          collectPickup(nearPickup.it);
+        }
+      }else{
+        const near = nearestInteractable();
+        if(near){
+          ui.toast.style.display = "block";
+          ui.toastT.textContent = near.it.name;
+          // ✅ if it's trainer (slot 19), hint leveling
+          if(near.it && near.it.devSlot === 19){
+            ui.toastB.innerHTML = `Press <span class="k">E</span> to spend XP and level up.`;
+          }else{
+            ui.toastB.innerHTML = `Press <span class="k">E</span> to interact.`;
+          }
+          if(keys.get("KeyE") === true){
+            keys.set("KeyE", false);
+            doInteract(near.it);
+          }
+        }else{
+          ui.toast.style.display = "none";
+        }
+      }
+
+      ui.pos.textContent = `${Math.round(state.player.x)}, ${Math.round(state.player.y)}`;
+      ui.zone.textContent = currentZone();
+// ✅ zone enter/leave hooks for quest system
+try{
+  const zid = currentZoneId();
+  if(zid !== state.zoneId){
+    const prev = state.zoneId;
+    state.zoneId = zid;
+    // Lore: unlock zone entry once
+    try{ if(zid) Lore.unlock('zone:'+zid, 'Discovered: ' + zid, 'You have explored a new area.'); }catch(_){ }
+    if(window.MainStoryQuestSystem){
+      if(prev) MainStoryQuestSystem.leaveZone(prev);
+      if(zid) MainStoryQuestSystem.enterZone(zid);
+    }
+  }
+}catch(_){}
+
+      ui.hp.textContent = String(Math.round(state.player.hp));
+    }else{
+      ui.pos.textContent = `${Math.round(state.player.x)}, ${Math.round(state.player.y)}`;
+      ui.zone.textContent = currentZone();
+      ui.hp.textContent = String(Math.round(state.player.hp));
+    }
+
+    // ✅ Progression HUD refresh (always)
+    try{
+      if(window.Progression){
+        const lvl = (typeof Progression.getLevel === "function") ? Progression.getLevel() : 1;
+        const xp = (typeof Progression.getXp === "function") ? Progression.getXp() : 0;
+        const need = (typeof Progression.getXpToNext === "function") ? Progression.getXpToNext() : 0;
+        ui.plvl.textContent = String(lvl|0);
+        ui.pxp.textContent = String(xp|0);
+        ui.pxpN.textContent = String((need|0) || 0);
+      }
+    }catch(_){}
+
+    cacheTimer -= dt;
+    if(cacheTimer <= 0){
+      cacheTimer = 1 / MAP_CACHE.hz;
+      refreshMapCache(false);
+    }
+
+    if(state.mini.enabled){
+      miniTimer -= dt;
+      if(miniTimer <= 0){
+        miniTimer = 0.1;
+        miniNeedsRedraw = true;
+      }
+    }
+
+    draw();
+  requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  let lastPX = state.player.x, lastPY = state.player.y;
+  setInterval(()=>{
+    const moved = Math.hypot(state.player.x - lastPX, state.player.y - lastPY) > 40;
+    if(moved){
+      lastPX = state.player.x; lastPY = state.player.y;
+      saveGame();
+    }
+  }, 45000);
+
+})();
+</script>
+</body>
+</html>

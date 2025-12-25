@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Nephilim — Launcher</title>
+<style>
+  :root{
+    --bg:#070a10; --fg:#d7ffe3; --muted:#9bd7b0; --accent:#6df;
+    --danger:#ff6b6b; --ok:#6bff95; --panel:rgba(8,12,18,.78);
+    --panel2:rgba(8,12,18,.92); --border:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+  .wrap{min-height:100%;display:grid;place-items:center;padding:24px}
+  .shell{width:min(1020px, 96vw)}
+  .hero{
+    border:1px solid var(--border); border-radius:18px; background:linear-gradient(180deg, rgba(109,255,149,.06), rgba(255,255,255,.02));
+    padding:18px 18px; box-shadow:0 18px 60px rgba(0,0,0,.55);
+  }
+  .title{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .title h1{font-size:28px;letter-spacing:.2px}
+  .title .tag{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.04)}
+  .sub{margin-top:8px;color:var(--muted);line-height:1.35}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+  @media (max-width: 920px){ .grid{grid-template-columns:1fr} }
+  .card{
+    border:1px solid var(--border); border-radius:18px; background:var(--panel);
+    padding:14px; box-shadow:0 12px 40px rgba(0,0,0,.35); backdrop-filter: blur(8px);
+  }
+  .card h2{font-size:16px}
+  .meta{margin-top:8px;color:var(--muted);font-size:12px;line-height:1.35}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button{
+    appearance:none;border:1px solid var(--border); background:rgba(255,255,255,.07); color:var(--fg);
+    padding:9px 10px;border-radius:12px;cursor:pointer;font-weight:700;font-size:13px;
+  }
+  button:hover{background:rgba(255,255,255,.10)}
+  button.primary{background:rgba(109,255,149,.14);border-color:rgba(109,255,149,.28)}
+  button.danger{background:rgba(255,107,107,.12);border-color:rgba(255,107,107,.28)}
+  button.ghost{background:transparent}
+  .small{font-size:12px;font-weight:600}
+  .footer{margin-top:14px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .kbd{border:1px solid var(--border);border-bottom-color:rgba(255,255,255,.22);background:rgba(255,255,255,.04);padding:2px 6px;border-radius:8px;color:var(--fg)}
+  .toast{
+    position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+    padding:10px 12px;border-radius:12px;border:1px solid var(--border);
+    background:var(--panel2);box-shadow:0 14px 60px rgba(0,0,0,.55);
+    display:none;max-width:min(720px,92vw);
+  }
+  .toast.show{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="shell">
+    <div class="hero">
+      <div class="title">
+        <h1>Nephilim</h1>
+        <span class="tag">Launcher + Save Slots</span>
+        <span class="tag" id="activeTag">Active: —</span>
+      </div>
+      <div class="sub">
+        Pick a save slot to <b>Continue</b>, start a <b>New Game</b>, or reset your run.<br/>
+        Tip: If you ever want to re‑try missions, use <b>Reset Quests</b> (keeps your position/inventory) or <b>New Game</b> (full reset).
+      </div>
+
+      <div class="grid" id="slots"></div>
+
+      <div class="footer">
+        <div>
+          Controls: <span class="kbd">Click</span> • Runs on <span class="kbd">file://</span> or hosted
+        </div>
+        <div class="small">
+          Game entry: <span class="kbd">level1_slot_enabled_v2.html</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  // -------- Config (shared with patched game files) --------
+  const SLOT_KEY = "np_active_save_slot";
+  const SLOT_NAMES_KEY = "np_slot_names_v1";
+  const SLOTS = ["slot1","slot2","slot3"];
+
+  // Base keys used by your game
+  const KEY = {
+    save: "level1_save_v1",
+    inv:  "level1_inv_v1",
+    prog: "level1_prog_v1",
+    dev:  "level1_dev_v1",
+    quests: "nephilim_main_story_state_v1",
+    dlgPrefix: "dlg_scripted_state_v2__" // we namespace by slot in patched dialogue file
+  };
+
+  function slotKey(baseKey, slot){ return `${baseKey}__${slot}`; }
+
+  function toast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>t.classList.remove("show"), 1600);
+  }
+
+  function safeParse(raw){ try{ return raw ? JSON.parse(raw) : null; }catch(_){ return null; } }
+  function fmtTime(ts){
+    if(!ts) return "—";
+    const d = new Date(ts);
+    return d.toLocaleString();
+  }
+
+  function getSlotNames(){
+    const raw = localStorage.getItem(SLOT_NAMES_KEY);
+    const names = safeParse(raw) || {};
+    return names;
+  }
+  function setSlotName(slot, name){
+    const names = getSlotNames();
+    names[slot] = String(name || "").slice(0, 40);
+    localStorage.setItem(SLOT_NAMES_KEY, JSON.stringify(names));
+  }
+
+  function readSlotMeta(slot){
+    const save = safeParse(localStorage.getItem(slotKey(KEY.save, slot)));
+    const prog = safeParse(localStorage.getItem(slotKey(KEY.prog, slot)));
+    const qs   = safeParse(localStorage.getItem(slotKey(KEY.quests, slot)));
+
+    const name = (getSlotNames()[slot] || `Save ${slot.replace("slot","")}`);
+    const level = prog && typeof prog.level==="number" ? prog.level : 1;
+    const xp = prog && typeof prog.xp==="number" ? prog.xp : 0;
+
+    const pos = (save && isFinite(save.x) && isFinite(save.y)) ? `x:${Math.round(save.x)} y:${Math.round(save.y)}` : "—";
+    const hp  = (save && typeof save.hp==="number") ? Math.round(save.hp) : "—";
+    const last = (save && save.ts) ? save.ts : (qs && qs.meta && qs.meta.updatedAt) ? qs.meta.updatedAt : null;
+
+    const questText = (() => {
+      if(!qs || !qs.activeQuestId) return "—";
+      const a = String(qs.activeQuestId);
+      const step = (qs.objectives && Array.isArray(qs.objectives)) ? `${qs.objectives.filter(o=>o && o.done).length}/${qs.objectives.length}` : "—";
+      return `${a} (${step})`;
+    })();
+
+    return { slot, name, level, xp, pos, hp, last, questText, hasSave: !!save };
+  }
+
+  function setActive(slot){
+    localStorage.setItem(SLOT_KEY, slot);
+    document.getElementById("activeTag").textContent = `Active: ${slot}`;
+  }
+
+  function clearSlot(slot, what="all"){
+    // what: all | pos | quests
+    const keysToClear = [];
+    if(what==="all" || what==="pos") keysToClear.push(slotKey(KEY.save, slot));
+    if(what==="all") keysToClear.push(slotKey(KEY.inv, slot), slotKey(KEY.prog, slot), slotKey(KEY.dev, slot));
+    if(what==="all" || what==="quests") keysToClear.push(slotKey(KEY.quests, slot));
+    // ✅ Also clear legacy (non-slot) keys so old builds don't "stick"
+    if(what==="all" || what==="pos") keysToClear.push(KEY.save);
+    if(what==="all") keysToClear.push(KEY.inv, KEY.prog, KEY.dev);
+    if(what==="all" || what==="quests") keysToClear.push(KEY.quests);
+
+    for(const k of keysToClear){
+      try{ localStorage.removeItem(k); }catch(_){}
+    }
+
+    // Dialogue states: remove anything that matches our namespaced keys: dlg_scripted_state_v2__<slot>__
+    // (Patched dialogue_merged_slot_enabled.js writes that format)
+    try{
+      const prefix = KEY.dlgPrefix + slot + "__";
+      const kill = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(k && k.startsWith(prefix)) kill.push(k);
+      }
+      kill.forEach(k=>localStorage.removeItem(k));
+      // ✅ legacy dialogue state buckets (no slot)
+      const legacyPrefix = KEY.dlgPrefix;
+      const kill2 = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(k && k.startsWith(legacyPrefix) && !k.startsWith(prefix)) kill2.push(k);
+      }
+      kill2.forEach(k=>localStorage.removeItem(k));
+    }catch(_){}
+  }
+
+  function launch(slot){
+    setActive(slot);
+    // Patched entry file reads active slot and uses slot-based storage keys
+    location.href = "level1_slot_enabled_v2.html";
+  }
+
+  function render(){
+    const root = document.getElementById("slots");
+    root.innerHTML = "";
+
+    const active = localStorage.getItem(SLOT_KEY) || "slot1";
+    document.getElementById("activeTag").textContent = `Active: ${active}`;
+
+    for(const slot of SLOTS){
+      const meta = readSlotMeta(slot);
+
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <h2>${meta.name}</h2>
+        <div class="meta">
+          <div><b>Level</b>: ${meta.level}  <span style="opacity:.65">XP ${meta.xp}</span></div>
+          <div><b>Last</b>: ${fmtTime(meta.last)}</div>
+          <div><b>Position</b>: ${meta.pos}  <span style="opacity:.65">HP ${meta.hp}</span></div>
+          <div><b>Main Quest</b>: ${meta.questText}</div>
+        </div>
+      `;
+
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const btnContinue = document.createElement("button");
+      btnContinue.className = "primary";
+      btnContinue.textContent = "Continue";
+      btnContinue.onclick = () => launch(slot);
+
+      const btnNew = document.createElement("button");
+      btnNew.className = "danger";
+      btnNew.textContent = "New Game";
+      btnNew.onclick = () => {
+        if(confirm(`Start a NEW GAME on ${meta.name}? This will wipe that slot's position, inventory, level, quests, and dialogue flags.`)){
+          clearSlot(slot, "all");
+          toast("Slot reset (new game).");
+          launch(slot);
+        }
+      };
+
+      const btnResetQuests = document.createElement("button");
+      btnResetQuests.textContent = "Reset Quests";
+      btnResetQuests.onclick = () => {
+        if(confirm(`Reset MAIN STORY quest progress on ${meta.name}? (Keeps your position + inventory.)`)){
+          clearSlot(slot, "quests");
+          toast("Quests reset.");
+          render();
+        }
+      };
+
+      const btnResetPos = document.createElement("button");
+      btnResetPos.textContent = "Reset Position";
+      btnResetPos.onclick = () => {
+        if(confirm(`Reset your saved position on ${meta.name}? Next load will spawn at the map spawn point.`)){
+          clearSlot(slot, "pos");
+          toast("Position reset.");
+          render();
+        }
+      };
+
+      const btnRename = document.createElement("button");
+      btnRename.className = "ghost";
+      btnRename.textContent = "Rename";
+      btnRename.onclick = () => {
+        const name = prompt("Slot name:", meta.name);
+        if(name!==null){
+          setSlotName(slot, name.trim() || meta.name);
+          render();
+        }
+      };
+
+      row.appendChild(btnContinue);
+      row.appendChild(btnNew);
+      row.appendChild(btnResetQuests);
+      row.appendChild(btnResetPos);
+      row.appendChild(btnRename);
+
+      card.appendChild(row);
+      root.appendChild(card);
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
