@@ -174,7 +174,7 @@
         case "start_troll_duel": {
           const encounterId = (args && (args.encounterId || args.encounter)) || "encounter.troll_duel_grath";
           const returnUrl = (args && args.returnUrl) || window.location.href;
-          const duelUrl = (args && args.url) || "troll_duel.html";
+          const duelUrl = (args && args.url) || "troll_duel_slot_enabled.html";
           try{
             localStorage.setItem("np_duel_return_url_v1", String(returnUrl));
           }catch(_){}
