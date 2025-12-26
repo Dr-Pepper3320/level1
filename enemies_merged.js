@@ -849,6 +849,46 @@ function killEnemy(e){
       e.x = clamp(e.x, e.r, state.world.w - e.r);
       e.y = clamp(e.y, e.r, state.world.h - e.r);
 
+      // ✅ prevent enemies from walking inside the player's hitbox (player is "solid")
+      // Push the enemy outward if overlapping the player. This keeps melee/aim collisions consistent.
+      {
+        const pr = (CFG && CFG.player && typeof CFG.player.radius==="number")
+          ? CFG.player.radius
+          : ((state && state.player && typeof state.player.r==="number") ? state.player.r : 10);
+
+        const minDist = pr + (e.r || 0);
+        const dxp = e.x - p.x;
+        const dyp = e.y - p.y;
+        let dist = Math.hypot(dxp, dyp);
+
+        if(dist > 0.0001 && dist < minDist){
+          const nx = dxp / dist;
+          const ny = dyp / dist;
+          const push = (minDist - dist);
+
+          // push position out
+          e.x += nx * push;
+          e.y += ny * push;
+
+          // remove inward velocity component so it doesn't immediately re-penetrate
+          const vdot = (e.vx * nx) + (e.vy * ny);
+          if(vdot < 0){
+            e.vx -= vdot * nx;
+            e.vy -= vdot * ny;
+          }
+
+          // keep in bounds after push
+          e.x = clamp(e.x, e.r, state.world.w - e.r);
+          e.y = clamp(e.y, e.r, state.world.h - e.r);
+
+        }else if(dist <= 0.0001){
+          // perfect overlap edge case
+          const a = Math.random() * Math.PI * 2;
+          e.x = clamp(p.x + Math.cos(a) * minDist, e.r, state.world.w - e.r);
+          e.y = clamp(p.y + Math.sin(a) * minDist, e.r, state.world.h - e.r);
+        }
+      }
+
       const dh = Math.hypot(e.x - e.homeX, e.y - e.homeY);
       if(dh > e.homeR + 160){
         const dx = e.homeX - e.x, dy = e.homeY - e.y;

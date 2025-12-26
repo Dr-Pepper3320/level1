@@ -1688,13 +1688,33 @@
   function ensureMana(){
     const p = state && state.player;
     if(!p) return;
+
     // Pull maxMp / regen from Progression if present
     let s = null;
     try{ s = (typeof getStats === "function") ? getStats() : null; }catch(_){}
-    const maxMp = (s && typeof s.maxMp === "number") ? s.maxMp : (typeof p.maxMp === "number" ? p.maxMp : MANA.baseMax);
+
+    const maxMp = (s && typeof s.maxMp === "number")
+      ? s.maxMp
+      : (typeof p.maxMp === "number" ? p.maxMp : MANA.baseMax);
+
     p.maxMp = maxMp;
-    if(typeof p.mp !== "number") p.mp = p.maxMp;
-    p.mp = Math.max(0, Math.min(p.mp, p.maxMp));
+
+    // If another part of the game uses different field names, accept them.
+    if(typeof p.mp !== "number"){
+      if(typeof p.magicka === "number") p.mp = p.magicka;
+      else if(typeof p.mana === "number") p.mp = p.mana;
+      else if(typeof p.magika === "number") p.mp = p.magika; // common misspelling
+      else p.mp = p.maxMp;
+    }
+
+    p.mp = Math.max(0, Math.min(Number(p.mp)||0, p.maxMp));
+
+    // Keep aliases in sync so HUD / other scripts always see the same value.
+    p.magicka = p.mp;
+    p.mana = p.mp;
+    p.magika = p.mp;
+    p.maxMagicka = p.maxMp;
+    p.maxMana = p.maxMp;
   }
 
   function mpRegenRate(){
@@ -1707,15 +1727,29 @@
   function spendMagicka(cost, failMsg){
     ensureMana();
     const p = state.player;
+
     const need = Math.max(0, Number(cost)||0);
     if(need <= 0) return true;
-    if((p.mp||0) + 1e-6 < need){
+
+    const cur =
+      (typeof p.mp === "number") ? p.mp :
+      (typeof p.magicka === "number") ? p.magicka :
+      (typeof p.mana === "number") ? p.mana :
+      (typeof p.magika === "number") ? p.magika : 0;
+
+    if(cur + 1e-6 < need){
       try{
         if(typeof toast === "function") toast("No Magicka", failMsg || "Not enough magicka.");
       }catch(_){}
       return false;
     }
-    p.mp = Math.max(0, (p.mp||0) - need);
+
+    const next = Math.max(0, cur - need);
+    p.mp = next;
+    p.magicka = next;
+    p.mana = next;
+    p.magika = next;
+
     manaBlockT = Math.max(manaBlockT, MANA.regenDelay);
     return true;
   }
@@ -2065,15 +2099,26 @@ const swing = { phase:"idle", t:0, hit:new Set() };
     anim.shockT = DATA.shockwave.life;
 
     const p=state.player;
+    const dmg = shockDmg() * (p.dmgMul||1) * (1 + (b.shockPct||0));
+    const kb  = (DATA.shockwave.knockback||0);
 
+    // ✅ apply damage + knockback once (also uses bonus radius)
     for(const e of enemies()){
       if(!e||e.dead) continue;
-      const dx=e.x-p.x, dy=e.y-p.y;
-      const d=Math.hypot(dx,dy);
+
+      const dx = e.x - p.x;
+      const dy = e.y - p.y;
+      const d  = Math.hypot(dx,dy);
       const hr = enemyHitR(e);
 
-      if(d>0 && d <= (DATA.shockwave.radius + hr)){
-        hitEnemy(e, shockDmg(), (dx/d)*DATA.shockwave.knockback, (dy/d)*DATA.shockwave.knockback);
+      // include enemy hit radius so big enemies still get hit at the edge
+      if(d <= (radius + hr)){
+        if(d > 0.0001){
+          hitEnemy(e, dmg, (dx/d)*kb, (dy/d)*kb);
+        }else{
+          const a = Math.random()*Math.PI*2;
+          hitEnemy(e, dmg, Math.cos(a)*kb, Math.sin(a)*kb);
+        }
       }
     }
   }
@@ -2287,7 +2332,8 @@ const swing = { phase:"idle", t:0, hit:new Set() };
     if(manaBlockT <= 0){
       const p = state.player;
       const r = mpRegenRate();
-      p.mp = Math.min(p.maxMp, (p.mp||0) + r * dt);
+      p.mp = Math.min(p.maxMp, (Number(p.mp)||Number(p.magicka)||Number(p.mana)||Number(p.magika)||0) + r * dt);
+      p.magicka = p.mp; p.mana = p.mp; p.magika = p.mp;
     }
     cooldowns.fire=Math.max(0,cooldowns.fire-dt);
     cooldowns.shock=Math.max(0,cooldowns.shock-dt);

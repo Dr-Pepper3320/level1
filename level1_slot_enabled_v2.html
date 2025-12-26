@@ -827,9 +827,8 @@
     const p = state.player || {};
     const hp = Math.max(0, Number(p.hp)||0);
     const hpMax = Math.max(1, Number(p.maxHp)||1);
-    const mp = Math.max(0, Number(p.mp)||0);
-    const mpMax = Math.max(1, Number(p.maxMp)||1);
-
+    const mp = Math.max(0, Number(p.mp ?? p.magicka ?? p.mana ?? p.magika ?? 0) || 0);
+    const mpMax = Math.max(1, Number(p.maxMp ?? p.maxMagicka ?? p.maxMana ?? 1) || 1);
     if(ui.hudHpFill) ui.hudHpFill.style.width = (100 * (hp / hpMax)) + "%";
     if(ui.hudHpText) ui.hudHpText.textContent = `${Math.ceil(hp)} / ${Math.ceil(hpMax)}`;
 
