@@ -48,6 +48,8 @@
   function fireballDamageForLevel(L){ return Math.round((9 + (L - 1) * 1.2) * 10) / 10; }
   function shockDamageForLevel(L){ return Math.round((6 + (L - 1) * 0.9) * 10) / 10; }
   function maxHpForLevel(L){ return Math.round(100 + (L - 1) * 6); }
+  function maxMpForLevel(L){ return Math.round(80 + (L - 1) * 4); }
+  function mpRegenForLevel(L){ return Math.round((10 + (L - 1) * 0.35) * 100) / 100; }
   function powerForLevel(L){ return 1 + (L - 1) * 0.05; }
 
   // ======================
@@ -293,7 +295,15 @@
     state.player.maxHp = hp;
     if(typeof state.player.hp !== "number") state.player.hp = state.player.maxHp;
     state.player.hp = Math.min(state.player.hp, state.player.maxHp);
-  }
+  
+
+    // Magicka
+    const baseMp = maxMpForLevel(baseL);
+    const mpMax = Math.round((baseMp + (b.mpFlat||0)) * (1 + (b.mpPct||0)));
+    state.player.maxMp = mpMax;
+    if(typeof state.player.mp !== "number") state.player.mp = state.player.maxMp;
+    state.player.mp = Math.min(state.player.mp, state.player.maxMp);
+}
 
   // ======================
   // DAMAGE SCALING (compat)
@@ -406,7 +416,9 @@
       meleeDmg:meleeDamageForLevel(L),
       fireballDmg:fireballDamageForLevel(L),
       shockDmg:shockDamageForLevel(L),
-      maxHp:maxHpForLevel(L)
+      maxHp:maxHpForLevel(L),
+      maxMp:maxMpForLevel(L),
+      mpRegen:mpRegenForLevel(L)
     };
 
     const b = sumSkillBonuses();
@@ -417,6 +429,8 @@
     const shock = Math.round(base.shockDmg * (1 + (b.shockPct||0)) * 10) / 10;
 
     const hp = Math.round((base.maxHp + (b.hpFlat||0)) * (1 + (b.hpPct||0)));
+    const mp = Math.round((base.maxMp + (b.mpFlat||0)) * (1 + (b.mpPct||0)));
+    const mpRegen = Math.max(0, (base.mpRegen||10) * (1 + (b.mpRegenPct||0)) + (b.mpRegenFlat||0));
 
     return {
       ...base,
@@ -424,6 +438,8 @@
       fireballDmg: fire,
       shockDmg: shock,
       maxHp: hp,
+      maxMp: mp,
+      mpRegen: mpRegen,
       bonuses: b,
       unlocks: (b && b.unlocks) ? b.unlocks : {},
       bonusesSummary: bonusesSummary(b)
@@ -1660,7 +1676,67 @@
     }
   };
 
-  const swing = { phase:"idle", t:0, hit:new Set() };
+  
+  // ---------------- MAGICKA ----------------
+  const MANA = {
+    baseMax: 100,
+    regenPerSecFallback: 12,   // fallback if Progression doesn't provide mpRegen
+    regenDelay: 0.85           // seconds after spending before regen starts
+  };
+  let manaBlockT = 0;
+
+  function ensureMana(){
+    const p = state && state.player;
+    if(!p) return;
+    // Pull maxMp / regen from Progression if present
+    let s = null;
+    try{ s = (typeof getStats === "function") ? getStats() : null; }catch(_){}
+    const maxMp = (s && typeof s.maxMp === "number") ? s.maxMp : (typeof p.maxMp === "number" ? p.maxMp : MANA.baseMax);
+    p.maxMp = maxMp;
+    if(typeof p.mp !== "number") p.mp = p.maxMp;
+    p.mp = Math.max(0, Math.min(p.mp, p.maxMp));
+  }
+
+  function mpRegenRate(){
+    let s = null;
+    try{ s = (typeof getStats === "function") ? getStats() : null; }catch(_){}
+    const r = (s && typeof s.mpRegen === "number") ? s.mpRegen : MANA.regenPerSecFallback;
+    return Math.max(0, r);
+  }
+
+  function spendMagicka(cost, failMsg){
+    ensureMana();
+    const p = state.player;
+    const need = Math.max(0, Number(cost)||0);
+    if(need <= 0) return true;
+    if((p.mp||0) + 1e-6 < need){
+      try{
+        if(typeof toast === "function") toast("No Magicka", failMsg || "Not enough magicka.");
+      }catch(_){}
+      return false;
+    }
+    p.mp = Math.max(0, (p.mp||0) - need);
+    manaBlockT = Math.max(manaBlockT, MANA.regenDelay);
+    return true;
+  }
+
+  function manaCost(name){
+    // Central tuning point
+    // (You can rebalance these whenever—no other code changes needed)
+    const map = {
+      sword: 0,
+      fireball: 18,
+      shockwave: 16,
+      whirlwind: 14,
+      lunge: 12,
+      firenova: 26,
+      chain: 24,
+      guard: 10
+    };
+    return map[name] ?? 0;
+  }
+
+const swing = { phase:"idle", t:0, hit:new Set() };
   const cooldowns = { fire:0, shock:0, whirlwind:0, lunge:0, nova:0, chain:0, guard:0 };
   const projectiles = [];
   const fx = { shockR:0, shockT:0, shockGrow:0, shockMaxR:0, guardT:0 };
@@ -1937,6 +2013,9 @@
     const s = getStats();
     const b = (s && s.bonuses) ? s.bonuses : {};
 
+    if(!spendMagicka(manaCost("fireball"), "Fireball costs magicka.")) return;
+
+
     if(cooldowns.fire>0) return;
     const cdMul = 1 + (b.fireCdPct||0);
     cooldowns.fire = Math.max(0.12, DATA.fireball.cooldown * cdMul);
@@ -1965,6 +2044,9 @@
   function castShockwave(){
     const s = getStats();
     const b = (s && s.bonuses) ? s.bonuses : {};
+
+    if(!spendMagicka(manaCost("shockwave"), "Shockwave costs magicka.")) return;
+
 
     if(cooldowns.shock>0) return;
     const cdMul = 1 + (b.shockCdPct||0);
@@ -2012,6 +2094,9 @@
       return;
     }
     if(anim.shockT > 0 || anim.chainT>0 || anim.novaT>0 || anim.lungeT>0 || anim.whirlT>0) return;
+
+    if(!spendMagicka(manaCost("whirlwind"), "Whirlwind costs magicka.")) return;
+
     if(cooldowns.whirlwind > 0) return;
 
     const cdMul = 1 + (b.whirlwindCdPct||0);
@@ -2044,6 +2129,9 @@
       return;
     }
     if(anim.shockT > 0 || anim.chainT>0 || anim.novaT>0 || anim.lungeT>0 || anim.whirlT>0) return;
+
+    if(!spendMagicka(manaCost("lunge"), "Lunge costs magicka.")) return;
+
     if(cooldowns.lunge > 0) return;
 
     cooldowns.lunge = DATA.lunge.cooldown;
@@ -2081,6 +2169,9 @@
       return;
     }
     if(anim.shockT > 0 || anim.chainT>0 || anim.novaT>0 || anim.lungeT>0 || anim.whirlT>0) return;
+
+    if(!spendMagicka(manaCost("firenova"), "FireNova costs magicka.")) return;
+
     if(cooldowns.nova > 0) return;
 
     const cdMul = 1 + (b.novaCdPct||0);
@@ -2119,6 +2210,9 @@
       return;
     }
     if(anim.shockT > 0 || anim.chainT>0 || anim.novaT>0 || anim.lungeT>0 || anim.whirlT>0) return;
+
+    if(!spendMagicka(manaCost("chain"), "ChainShock costs magicka.")) return;
+
     if(cooldowns.chain > 0) return;
 
     const cdMul = 1 + (b.chainCdPct||0);
@@ -2169,6 +2263,9 @@
       toast("Locked", "Learn Guard in Survival to use Key C.");
       return;
     }
+
+    if(!spendMagicka(manaCost("guard"), "Guard costs magicka.")) return;
+
     if(cooldowns.guard > 0) return;
 
     cooldowns.guard = DATA.guard.cooldown;
@@ -2185,6 +2282,13 @@
 
   // ---------------- UPDATE ----------------
   Combat.update=(dt)=>{
+    ensureMana();
+    manaBlockT = Math.max(0, manaBlockT - dt);
+    if(manaBlockT <= 0){
+      const p = state.player;
+      const r = mpRegenRate();
+      p.mp = Math.min(p.maxMp, (p.mp||0) + r * dt);
+    }
     cooldowns.fire=Math.max(0,cooldowns.fire-dt);
     cooldowns.shock=Math.max(0,cooldowns.shock-dt);
     cooldowns.whirlwind=Math.max(0,cooldowns.whirlwind-dt);

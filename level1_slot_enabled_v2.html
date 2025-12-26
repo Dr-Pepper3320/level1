@@ -205,6 +205,61 @@
     transition:width .22s ease;
   }
 
+
+  /* ===== Minimal Combat HUD ===== */
+  .hudHidden{ display:none !important; }
+
+  #combatHud{
+    position:fixed;
+    left:14px;
+    top:14px;
+    z-index:60;
+    width:min(320px, 62vw);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    pointer-events:none;
+    user-select:none;
+  }
+  #combatHud .hudRow{
+    display:grid;
+    grid-template-columns: 76px 1fr 72px;
+    gap:10px;
+    align-items:center;
+    padding:8px 10px;
+    border-radius:14px;
+    background:rgba(8,12,18,.55);
+    border:1px solid rgba(255,255,255,.10);
+    box-shadow:0 10px 28px rgba(0,0,0,.35);
+    backdrop-filter: blur(6px);
+  }
+  #combatHud .hudLabel{
+    font-size:11px;
+    letter-spacing:.12em;
+    font-weight:900;
+    color:rgba(255,255,255,.82);
+  }
+  #combatHud .hudVal{
+    font-size:12px;
+    text-align:right;
+    color:rgba(255,255,255,.78);
+    font-variant-numeric: tabular-nums;
+  }
+  #combatHud .hudBar{
+    height:12px;
+    border-radius:999px;
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.08);
+  }
+  #combatHud .hudFill{
+    height:100%;
+    width:100%;
+    transform-origin:left center;
+  }
+  #combatHud .hudBar.hp .hudFill{ background: linear-gradient(90deg, #ff4c57, #ffb0b4); }
+  #combatHud .hudBar.mp .hudFill{ background: linear-gradient(90deg, #58a6ff, #b9dbff); }
+
 </style>
 </head>
 <body>
@@ -254,7 +309,7 @@
 </div>
 
 
-<div id="hud">
+<div id="hud" class="hudHidden">
   <div class="panel">
     <div class="title">LEVEL 1 — FREE ROAM</div>
     <div class="row" style="margin-bottom:8px">
@@ -287,6 +342,20 @@
 </div>
 
 <div id="mini" style="display:none"><canvas id="miniC" width="180" height="180"></canvas></div>
+
+
+<div id="combatHud" aria-label="Combat HUD">
+  <div class="hudRow">
+    <div class="hudLabel">HEALTH</div>
+    <div class="hudBar hp"><div id="hudHpFill" class="hudFill"></div></div>
+    <div id="hudHpText" class="hudVal">100/100</div>
+  </div>
+  <div class="hudRow">
+    <div class="hudLabel">MAGICKA</div>
+    <div class="hudBar mp"><div id="hudMpFill" class="hudFill"></div></div>
+    <div id="hudMpText" class="hudVal">100/100</div>
+  </div>
+</div>
 
 <div id="toast">
   <div class="t" id="toastT">Interaction</div>
@@ -610,7 +679,7 @@
       cineNpcId: null,
       _lastZoom: (CFG.camera.zoom || 1.0),
     },
-    player: { x: 320, y: 320, vx: 0, vy: 0, faceX: 0, faceY: 1, hp:100, hurtT:0, slowMul:1, _slowT:0 },
+    player: { x: 320, y: 320, vx: 0, vy: 0, faceX: 0, faceY: 1, hp:100, maxHp:100, mp:100, maxMp:100, hurtT:0, slowMul:1, _slowT:0 },
     mini: { enabled:false },
     convo: { npcId:null },
     zoneId: null,
@@ -720,6 +789,12 @@
     pos: document.getElementById("pos"),
     zone: document.getElementById("zone"),
     hp: document.getElementById("hp"),
+
+    // minimal combat HUD
+    hudHpFill: document.getElementById("hudHpFill"),
+    hudHpText: document.getElementById("hudHpText"),
+    hudMpFill: document.getElementById("hudMpFill"),
+    hudMpText: document.getElementById("hudMpText"),
     toast: document.getElementById("toast"),
     toastT: document.getElementById("toastT"),
     toastB: document.getElementById("toastB"),
@@ -748,6 +823,21 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => ui.toast.style.display = "none", 2400);
   }
+  function updateCombatHud(){
+    const p = state.player || {};
+    const hp = Math.max(0, Number(p.hp)||0);
+    const hpMax = Math.max(1, Number(p.maxHp)||1);
+    const mp = Math.max(0, Number(p.mp)||0);
+    const mpMax = Math.max(1, Number(p.maxMp)||1);
+
+    if(ui.hudHpFill) ui.hudHpFill.style.width = (100 * (hp / hpMax)) + "%";
+    if(ui.hudHpText) ui.hudHpText.textContent = `${Math.ceil(hp)} / ${Math.ceil(hpMax)}`;
+
+    if(ui.hudMpFill) ui.hudMpFill.style.width = (100 * (mp / mpMax)) + "%";
+    if(ui.hudMpText) ui.hudMpText.textContent = `${Math.floor(mp)} / ${Math.ceil(mpMax)}`;
+  }
+
+
 
   // ============
   // Dialogue zoom helpers
@@ -2867,7 +2957,8 @@ function currentZoneId(){
     p.hp = Math.max(0, p.hp - dmg);
     p.hurtT = 0.18;
     state.cam.shakeT = 0.12;
-    ui.hp.textContent = String(Math.round(p.hp));
+    try{ if(ui.hp) ui.hp.textContent = String(Math.round(p.hp)); }catch(_){ }
+    try{ updateCombatHud(); }catch(_){ }
     if(p.hp <= 0) toast("You fell", "Hit <span class='k'>Reset</span> to respawn.");
   }
 
@@ -3291,6 +3382,7 @@ function currentZoneId(){
 
       ui.pos.textContent = `${Math.round(state.player.x)}, ${Math.round(state.player.y)}`;
       ui.zone.textContent = currentZone();
+      try{ updateCombatHud(); }catch(_){ }
 // ✅ zone enter/leave hooks for quest system
 try{
   const zid = currentZoneId();

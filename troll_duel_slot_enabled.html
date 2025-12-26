@@ -60,7 +60,8 @@
 
   <div class="hud">
     <div class="row"><div class="label">You</div><div class="bar"><div id="pFill" class="fill" style="background:var(--ok)"></div></div><div id="pTxt" class="tiny">100 / 100</div></div>
-    <div class="row"><div class="label">Troll Chief</div><div class="bar"><div id="bFill" class="fill" style="background:var(--danger)"></div></div><div id="bTxt" class="tiny">180 / 180</div></div>
+        <div class="row"><div class="label">Magicka</div><div class="bar"><div id="mpFill" class="fill" style="background:var(--accent)"></div></div><div id="mpTxt" class="tiny">100 / 100</div></div>
+<div class="row"><div class="label">Troll Chief</div><div class="bar"><div id="bFill" class="fill" style="background:var(--danger)"></div></div><div id="bTxt" class="tiny">180 / 180</div></div>
     <div class="hint">Move: WASD / Arrows • Attack: Click or Space • Fire: Q • Shock: E</div>
   </div>
 
@@ -155,6 +156,8 @@
       y: innerHeight*0.56,
       hp: 100,
       maxHp: 100,
+      mp: 100,
+      maxMp: 100,
       faceX: 1,
       faceY: 0
     }
@@ -410,6 +413,8 @@
   const pFill = document.getElementById("pFill");
   const bFill = document.getElementById("bFill");
   const pTxt  = document.getElementById("pTxt");
+  const mpFill = document.getElementById("mpFill");
+  const mpTxt  = document.getElementById("mpTxt");
   const bTxt  = document.getElementById("bTxt");
   const panel = document.getElementById("panel");
   const panelTitle = document.getElementById("panelTitle");
@@ -483,8 +488,10 @@
   function updateUI(){
     const p = state.player;
     pFill.style.width = (100 * (p.hp / p.maxHp)) + "%";
+    if(mpFill) mpFill.style.width = (100 * ((p.mp||0) / (p.maxMp||1))) + "%";
     bFill.style.width = (100 * (boss.hp / boss.maxHp)) + "%";
     pTxt.textContent = Math.ceil(p.hp) + " / " + p.maxHp;
+    if(mpTxt) mpTxt.textContent = Math.floor(p.mp||0) + " / " + (p.maxMp||0);
     bTxt.textContent = Math.ceil(boss.hp) + " / " + boss.maxHp;
   }
 
