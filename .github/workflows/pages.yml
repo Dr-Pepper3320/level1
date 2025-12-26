@@ -18,14 +18,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout (with LFS)
         uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
 
-      - name: Setup Pages
+      # actions/checkout lfs can be flaky; explicitly pulling helps ensure binaries are present. :contentReference[oaicite:1]{index=1}
+      - name: Pull LFS objects
+        run: |
+          git lfs install
+          git lfs pull
+          git lfs checkout
+
+      - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      # For a plain static site (HTML/JS/CSS in repo root), just upload the repo content.
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
